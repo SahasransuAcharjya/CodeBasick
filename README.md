@@ -2,7 +2,7 @@
 
 CodeBasick is an AI-powered, beginner-friendly online programming IDE designed to make learning to code intuitive, accessible, and structured.
 
-This repository is currently at **Phase 3: Frontend Foundation and Design System**, providing a dark-charcoal visual system, cohesive component library, responsive application shell, and honest client-side workspace management.
+This repository is currently at **Phase 4: Interactive Code Workspace**, featuring a client-side Monaco Editor integration, multi-file tab bar, language selector (C and Python), buffer preservation, collapsible panels, and an honest output console.
 
 ---
 
@@ -17,21 +17,31 @@ CodeBasick/
 │   │   │   │   ├── docs/        # Guides & documentation route
 │   │   │   │   ├── settings/    # Local editor preferences route
 │   │   │   │   ├── workspace/
-│   │   │   │   │   └── [id]/    # 3-Panel IDE layout preview
+│   │   │   │   │   ├── [id]/    # Interactive Monaco IDE workspace route
+│   │   │   │   │   └── page.tsx # Workspace index redirect
 │   │   │   │   ├── globals.css  # Design system tokens & reset
 │   │   │   │   ├── layout.tsx   # Root layout (fonts & metadata)
 │   │   │   │   ├── not-found.tsx# Custom 404 page
-│   │   │   │   └── page.tsx     # Workspaces dashboard
+│   │   │   │   └── page.tsx     # Workspaces dashboard & creation modal
 │   │   │   ├── components/
 │   │   │   │   ├── layout/      # AppShell (collapsible sidebar & top nav)
 │   │   │   │   └── ui/          # Button, Input, Textarea, Card, Badge, Modal, EmptyState, Skeleton
+│   │   │   ├── features/
+│   │   │   │   └── workspace/   # Monaco IDE Workspace Feature
+│   │   │   │       ├── CodeEditor.tsx          # Monaco Editor component
+│   │   │   │       ├── EditorTabs.tsx          # Tab management
+│   │   │   │       ├── FileExplorer.tsx        # File tree & file creation modal
+│   │   │   │       ├── OutputPanel.tsx         # Console tabs: Output, Diagnostics, Status
+│   │   │   │       ├── WorkspaceToolbar.tsx    # Workspace controls & language switch
+│   │   │   │       ├── WorkspaceShell.tsx      # Multi-buffer state orchestrator
+│   │   │   │       ├── workspace.constants.ts  # C & Python starters & configs
+│   │   │   │       └── workspace.types.ts      # Domain interfaces
 │   │   │   ├── lib/             # Storage manager & constants
 │   │   │   └── types/           # Domain TypeScript definitions
 │   │   ├── package.json         # Node scripts & dependencies
 │   │   ├── tsconfig.json        # TypeScript configuration (strict)
-│   │   ├── next.config.ts       # Next.js 16 configuration
-│   │   └── .env.example         # Frontend environment template
-│   └── api/                     # Backend Python FastAPI service
+│   │   └── next.config.ts       # Next.js 16 configuration
+│   └── api/                     # Backend Python FastAPI service (Untouched in Phase 4)
 │       ├── app/
 │       │   ├── api/             # Route controllers & endpoints
 │       │   ├── core/            # Configuration & settings management
@@ -94,25 +104,12 @@ pytest -v
 
 ---
 
-## Design System & Implemented Pages
+## Implemented Workspace Capabilities (Phase 4)
 
-- **Design Aesthetic**: Dark charcoal developer environment (`#0b0c0e`, `#15181e`, `#1b1e26`) with restrained emerald/teal accents (`#10b981`), neutral borders, and visible keyboard focus rings.
-- **Implemented Routes**:
-  - `/` — Workspaces Dashboard with creation modal and truthful first-use empty state.
-  - `/workspace/[id]` — 3-Panel IDE shell preview with starter file explorer and roadmap status.
-  - `/settings` — Local editor preferences (font size, tab indentation, dark charcoal theme).
-  - `/docs` — System documentation and architecture breakdown.
-  - `/*` — Intentional, accessible 404 Not Found page.
-
----
-
-## Current Phase Limitations
-
-- **Phase 3 strictly establishes the frontend foundation, design tokens, application shell, and reusable component library.**
-- The following features are intentionally scheduled for subsequent phases:
-  - Monaco Editor integration (Phase 4)
-  - Code execution runtime with Judge0 (Phase 5)
-  - AI Assistant / Gemini LLM integration (Phase 6)
-  - Database persistence with MongoDB (Phase 7)
-  - User authentication and cloud accounts
-  - PDF export
+- **Monaco Editor Client-Side Integration**: Embedded Monaco Editor via `@monaco-editor/react` (v4.7.0) with dark charcoal palette `codebasick-dark`, monospace font, bracket matching, automatic indentation, and responsive resizing.
+- **Languages**: **C (GCC C11)** and **Python 3**, with distinct starter templates.
+- **Buffer Safety**: Switching between languages or tabs maintains isolated in-memory source buffers. User edits are never silently overwritten.
+- **Multi-File Explorer**: Add and switch files (`.c`, `.h`, `.py`, `.js`, etc.) with extension validation and duplicate prevention.
+- **Output & Diagnostics Panel**: Real console with Output, Diagnostics, and Execution Status tabs.
+- **Honest Run Button**: Validates buffer metrics without fabricating fake execution output, confirming sandbox execution arrives with Judge0 in Phase 5.
+- **Responsive Workspace**: Automatic sidebar collapse and overlay mode for mobile viewports (< 768px).

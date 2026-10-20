@@ -2,24 +2,16 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  FileCode,
-  Terminal,
-  Sparkles,
-  Info,
-  Play,
-  RotateCcw,
-} from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
-import { Button, Badge } from "@/components/ui";
-import { getWorkspaceById } from "@/lib/storage";
+import { useParams, useRouter } from "next/navigation";
+import { AlertCircle, ArrowLeft, Plus } from "lucide-react";
+import { WorkspaceShell } from "@/features/workspace";
+import { Button } from "@/components/ui/Button";
+import { getWorkspaceById, createWorkspace } from "@/lib/storage";
 import { Workspace } from "@/types";
-import styles from "./Workspace.module.css";
 
 function WorkspaceViewInner() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id as string;
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,136 +26,109 @@ function WorkspaceViewInner() {
     setIsLoading(false);
   }, [id]);
 
-  const defaultFileName =
-    workspace?.language === "python"
-      ? "main.py"
-      : workspace?.language === "javascript"
-      ? "index.js"
-      : "index.html";
+  const handleCreateNew = () => {
+    const created = createWorkspace({
+      name: "Scratchpad Workspace",
+      language: "python",
+      description: "Quick coding scratchpad.",
+    });
+    router.push(`/workspace/${created.id}`);
+  };
 
-  const sampleSnippet =
-    workspace?.language === "python"
-      ? `# CodeBasick Python Workspace: ${workspace?.name || ""}\n\ndef greet(name: str):\n    return f"Hello, {name}! Welcome to CodeBasick."\n\nif __name__ == "__main__":\n    print(greet("Learner"))`
-      : workspace?.language === "javascript"
-      ? `// CodeBasick JavaScript Workspace: ${workspace?.name || ""}\n\nfunction greet(name) {\n    return \`Hello, \${name}! Welcome to CodeBasick.\`;\n}\n\nconsole.log(greet("Learner"));`
-      : `<!-- CodeBasick HTML/CSS Workspace -->\n<!DOCTYPE html>\n<html>\n  <body>\n    <h1>Welcome to CodeBasick</h1>\n  </body>\n</html>`;
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "var(--bg-canvas)",
+          color: "var(--text-muted)",
+          fontSize: "0.875rem",
+        }}
+      >
+        Loading CodeBasick Workspace...
+      </div>
+    );
+  }
 
-  return (
-    <AppShell>
-      <div className={styles.workspaceView}>
-        {/* Workspace Top Bar */}
-        <div className={styles.topBar}>
-          <div className={styles.titleArea}>
-            <Link href="/" className={styles.backButton}>
-              <ArrowLeft size={16} />
-              <span>Workspaces</span>
-            </Link>
-            <span style={{ color: "var(--border-default)" }}>|</span>
-            <h1 className={styles.heading}>
-              {workspace ? workspace.name : isLoading ? "Loading..." : "Workspace"}
-            </h1>
-            {workspace && <Badge variant="teal">{workspace.language.toUpperCase()}</Badge>}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<RotateCcw size={14} />}
-              disabled
-              title="Code execution enabled in Phase 5"
-            >
-              Reset
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Play size={14} />}
-              disabled
-              title="Code execution enabled in Phase 5"
-            >
-              Run Code
-            </Button>
-          </div>
+  if (!workspace) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "var(--bg-canvas)",
+          textAlign: "center",
+          padding: "2rem",
+        }}
+      >
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: "var(--radius-md)",
+            backgroundColor: "var(--surface-1)",
+            border: "1px solid var(--border-default)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--status-warning)",
+            marginBottom: "1rem",
+          }}
+        >
+          <AlertCircle size={24} />
         </div>
-
-        {/* 3-Panel IDE Layout Preview */}
-        <div className={styles.ideContainer}>
-          {/* Panel 1: File Explorer */}
-          <div className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <span>Files</span>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.fileItem}>
-                <FileCode size={14} color="var(--accent-primary)" />
-                <span>{defaultFileName}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Panel 2: Editor Interim Area */}
-          <div className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <span>Editor</span>
-              <Badge variant="neutral">Phase 3 Preview</Badge>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.editorInterim}>
-                <Info size={28} color="var(--accent-text)" style={{ marginBottom: "0.5rem" }} />
-                <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                  Monaco Editor Integrates in Phase 4
-                </h2>
-                <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", maxWidth: "420px", marginTop: "0.25rem" }}>
-                  This panel establishes the IDE shell layout. In Phase 4, the full interactive Monaco Editor with syntax highlighting and autocompletion will replace this placeholder.
-                </p>
-
-                <div className={styles.codeMock}>
-                  <code>{sampleSnippet}</code>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Panel 3: AI Assistant & Terminal Outline */}
-          <div className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                <Sparkles size={14} color="var(--accent-text)" />
-                AI Assistant
-              </span>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.assistantNotice}>
-                <strong>Beginner-Friendly AI Tutor</strong>
-                <p style={{ marginTop: "0.25rem" }}>
-                  Integrates in Phase 6 to explain syntax, review code, and provide hints without giving away solutions directly.
-                </p>
-              </div>
-
-              <div style={{ marginTop: "auto", borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                  <Terminal size={14} />
-                  <span>Output Terminal (Phase 5)</span>
-                </div>
-                <div style={{ background: "var(--bg-canvas)", padding: "0.5rem", borderRadius: "var(--radius-sm)", fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "var(--font-geist-mono)" }}>
-                  Waiting for execution...
-                </div>
-              </div>
-            </div>
-          </div>
+        <h1 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
+          Workspace Not Found
+        </h1>
+        <p
+          style={{
+            fontSize: "0.875rem",
+            color: "var(--text-secondary)",
+            maxWidth: "400px",
+            margin: "0.5rem 0 1.5rem",
+            lineHeight: 1.5,
+          }}
+        >
+          The requested workspace does not exist in local storage or has been removed.
+        </p>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <Link href="/">
+            <Button variant="secondary" leftIcon={<ArrowLeft size={14} />}>
+              Back to Workspaces
+            </Button>
+          </Link>
+          <Button variant="primary" leftIcon={<Plus size={14} />} onClick={handleCreateNew}>
+            Create New Workspace
+          </Button>
         </div>
       </div>
-    </AppShell>
-  );
+    );
+  }
+
+  return <WorkspaceShell initialWorkspace={workspace} />;
 }
 
 export default function WorkspacePage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: "2rem", color: "var(--text-secondary)", textAlign: "center" }}>
-          Loading workspace...
+        <div
+          style={{
+            height: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "var(--bg-canvas)",
+            color: "var(--text-muted)",
+          }}
+        >
+          Loading CodeBasick Workspace...
         </div>
       }
     >

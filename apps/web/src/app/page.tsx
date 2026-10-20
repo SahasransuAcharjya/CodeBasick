@@ -84,6 +84,8 @@ export default function DashboardPage() {
 
   const getLanguageLabel = (lang: ProgrammingLanguage) => {
     switch (lang) {
+      case "c":
+        return "C (GCC)";
       case "python":
         return "Python 3";
       case "javascript":
@@ -217,12 +219,12 @@ export default function DashboardPage() {
             <div className={styles.roadmapCard}>
               <span className={styles.roadmapTitle}>
                 <Code2 size={16} color="var(--accent-text)" />
-                Phase 4: Monaco IDE Editor
+                Phase 4: Interactive Monaco Workspace
               </span>
               <p className={styles.roadmapDesc}>
-                In-browser multi-file code editing, syntax highlighting, and theme synchronization.
+                In-browser multi-file code editing, Monaco Editor integration, C and Python support, and developer workspace layout.
               </p>
-              <span className={styles.roadmapStatus}>Next Phase</span>
+              <span className={styles.roadmapStatus} style={{ color: "var(--accent-primary)", borderColor: "var(--accent-border)" }}>Active &amp; Ready</span>
             </div>
 
             <div className={styles.roadmapCard}>
@@ -231,9 +233,9 @@ export default function DashboardPage() {
                 Phase 5: Code Execution Sandbox
               </span>
               <p className={styles.roadmapDesc}>
-                Isolated execution environment running Python and JavaScript with live terminal streams.
+                Isolated execution environment running C and Python with live terminal streams and Judge0 API.
               </p>
-              <span className={styles.roadmapStatus}>Planned</span>
+              <span className={styles.roadmapStatus}>Next Phase</span>
             </div>
 
             <div className={styles.roadmapCard}>
@@ -311,6 +313,7 @@ export default function DashboardPage() {
               }}
             >
               <option value="python">Python 3</option>
+              <option value="c">C (GCC C11)</option>
               <option value="javascript">JavaScript (Node.js)</option>
               <option value="html-css">HTML &amp; CSS</option>
             </select>

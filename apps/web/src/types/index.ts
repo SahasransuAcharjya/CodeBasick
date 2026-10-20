@@ -1,6 +1,15 @@
 /** Core Domain Models & Application Types */
 
-export type ProgrammingLanguage = "python" | "javascript" | "html-css";
+export type ProgrammingLanguage = "c" | "python" | "javascript" | "html-css";
+
+export interface WorkspaceFile {
+  id: string;
+  name: string;
+  language: ProgrammingLanguage;
+  content: string;
+  isEntry?: boolean;
+  isStarter?: boolean;
+}
 
 export interface Workspace {
   id: string;
@@ -10,6 +19,9 @@ export interface Workspace {
   createdAt: string;
   updatedAt: string;
   fileCount: number;
+  files?: WorkspaceFile[];
+  activeFileId?: string;
+  openFileIds?: string[];
 }
 
 export interface WorkspacePreferences {

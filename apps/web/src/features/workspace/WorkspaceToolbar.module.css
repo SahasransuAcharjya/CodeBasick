@@ -1,0 +1,155 @@
+.toolbar {
+  height: 48px;
+  background-color: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  gap: 1rem;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.backButton:hover {
+  color: var(--text-primary);
+}
+
+.divider {
+  color: var(--border-default);
+}
+
+.workspaceName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.center {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.langSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.langLabel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.select {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.iconToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.iconToggle:hover {
+  background-color: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.iconToggleActive {
+  background-color: var(--surface-3);
+  color: var(--accent-text);
+}
+
+.iconToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.badgeWrapper {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 0 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .left {
+    gap: 0.4rem;
+  }
+
+  .workspaceName,
+  .divider {
+    display: none;
+  }
+
+  .badgeWrapper {
+    display: none;
+  }
+
+  .langLabel {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .backButton span {
+    display: none;
+  }
+
+  .select {
+    padding: 0.25rem 0.35rem;
+    font-size: 0.75rem;
+    max-width: 110px;
+  }
+}
