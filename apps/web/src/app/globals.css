@@ -1,43 +1,147 @@
+/* ==========================================================================
+   CodeBasick Design System Tokens & Global Base
+   Theme: Serious Developer Tool (Dark Charcoal, Minimalist, Restrained Teal)
+   ========================================================================== */
+
 :root {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --surface: #121215;
-  --surface-border: #27272a;
-  --surface-hover: #18181b;
-  --primary: #3b82f6;
-  --primary-light: #60a5fa;
-  --text-muted: #a1a1aa;
-  --accent-green: #10b981;
+  /* Surfaces & Canvas */
+  --bg-canvas: #0b0c0e;
+  --bg-sidebar: #111317;
+  --bg-header: #111317;
+  --surface-1: #15181e;
+  --surface-2: #1b1e26;
+  --surface-3: #232732;
+  --surface-hover: #292e3a;
+  --surface-active: #323847;
+
+  /* Text & Foreground */
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-disabled: #4b5563;
+  --text-inverse: #0b0c0e;
+
+  /* Borders & Dividers */
+  --border-subtle: #1c2027;
+  --border-default: #262b35;
+  --border-strong: #383f4e;
+  --border-focus: #10b981;
+
+  /* Accent & Status (Restrained Teal/Emerald) */
+  --accent-primary: #10b981;
+  --accent-hover: #059669;
+  --accent-active: #047857;
+  --accent-subtle: rgba(16, 185, 129, 0.12);
+  --accent-border: rgba(16, 185, 129, 0.3);
+  --accent-text: #34d399;
+
+  /* System Feedback */
+  --status-success: #10b981;
+  --status-success-bg: rgba(16, 185, 129, 0.1);
+  --status-warning: #f59e0b;
+  --status-warning-bg: rgba(245, 158, 11, 0.1);
+  --status-error: #ef4444;
+  --status-error-bg: rgba(239, 68, 68, 0.1);
+  --status-info: #38bdf8;
+  --status-info-bg: rgba(56, 189, 248, 0.1);
+
+  /* Focus & Elevation */
+  --focus-ring: 0 0 0 2px rgba(16, 185, 129, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.65);
+
+  /* Geometry & Radius */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Dimensions */
+  --header-height: 54px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 60px;
+}
+
+/* Base Reset & Box Sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
   height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-  background-color: var(--background);
-  color: var(--foreground);
+  color-scheme: dark;
+  font-size: 16px;
+  text-size-adjust: 100%;
 }
 
 body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: 1.15;
+  margin: 0;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Universal Keyboard Focus Ring */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

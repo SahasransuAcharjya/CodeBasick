@@ -1,0 +1,134 @@
+.workspaceView {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+
+.backButton:hover {
+  color: var(--text-primary);
+}
+
+.heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ideContainer {
+  display: grid;
+  grid-template-columns: 220px 1fr 300px;
+  gap: 1rem;
+  min-height: 520px;
+}
+
+.panel {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  padding: 0.65rem 1rem;
+  background-color: var(--surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelBody {
+  padding: 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+}
+
+.editorInterim {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  background-color: var(--bg-canvas);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-default);
+}
+
+.codeMock {
+  width: 100%;
+  max-width: 480px;
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  text-align: left;
+  font-family: var(--font-geist-mono);
+  font-size: 0.8125rem;
+  color: var(--accent-text);
+  margin-top: 1rem;
+  white-space: pre-wrap;
+}
+
+.assistantNotice {
+  padding: 0.75rem;
+  background-color: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+  .ideContainer {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+}

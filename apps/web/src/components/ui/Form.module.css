@@ -1,0 +1,63 @@
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.required {
+  color: var(--status-error);
+  margin-left: 0.2rem;
+}
+
+.control {
+  width: 100%;
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.control:disabled {
+  background-color: var(--surface-2);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.controlError {
+  border-color: var(--status-error);
+}
+
+.controlError:focus {
+  border-color: var(--status-error);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+.helperText {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.errorText {
+  font-size: 0.75rem;
+  color: #f87171;
+}
