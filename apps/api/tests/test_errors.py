@@ -6,32 +6,32 @@ from app.core.config import Settings
 from app.core.exceptions import AppException, NotFoundException
 from app.main import create_app
 
-# Create a test-specific app instance to mount custom error-triggering routes safely
-test_app = create_app(Settings(ENVIRONMENT="test", DEBUG=False))
+# Create a dedicated app instance to mount custom error-triggering routes safely
+error_app = create_app(Settings(ENVIRONMENT="test", DEBUG=False))
 
 
-@test_app.get("/test/custom-app-error")
+@error_app.get("/test/custom-app-error")
 async def trigger_custom_error():
     raise AppException(message="Custom domain failure", status_code=400, details={"reason": "bad_input"})
 
 
-@test_app.get("/test/not-found-error")
+@error_app.get("/test/not-found-error")
 async def trigger_not_found():
     raise NotFoundException(message="Item not found")
 
 
-@test_app.get("/test/unhandled-error")
+@error_app.get("/test/unhandled-error")
 async def trigger_unhandled_error():
     # Simulate an internal unexpected error that contains sensitive string
     raise RuntimeError("Internal database secret string that must never be exposed to clients")
 
 
-@test_app.get("/test/validation-error")
+@error_app.get("/test/validation-error")
 async def trigger_validation(value: int = Query(..., gt=0)):
     return {"value": value}
 
 
-client = TestClient(test_app, raise_server_exceptions=False)
+client = TestClient(error_app, raise_server_exceptions=False)
 
 
 def test_404_not_found_standard():

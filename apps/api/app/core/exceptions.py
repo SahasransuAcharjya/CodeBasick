@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger("codebasick.exceptions")
 
 
+STATUS_422 = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
+
+
 class AppException(Exception):
     """Base exception for application-level errors."""
 
@@ -41,7 +44,7 @@ class ValidationException(AppException):
     def __init__(self, message: str = "Validation failed.", details: Optional[Any] = None) -> None:
         super().__init__(
             message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=STATUS_422,
             details=details,
         )
 
@@ -69,7 +72,7 @@ async def validation_exception_handler(
             }
         )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=STATUS_422,
         content={
             "error": "Request validation failed",
             "details": sanitized_errors,
