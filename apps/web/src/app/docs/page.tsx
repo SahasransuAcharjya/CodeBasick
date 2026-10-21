@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { BookOpen, Terminal, Code2, ShieldCheck, Cpu } from "lucide-react";
+import { Code2, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from "@/components/ui";
 

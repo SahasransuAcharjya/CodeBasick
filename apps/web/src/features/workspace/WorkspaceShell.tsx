@@ -49,6 +49,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [stdin, setStdin] = useState("");
 
   // Preferences
   const [fontSize, setFontSize] = useState(14);
@@ -276,6 +277,9 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
 
   // Handle Run Button Click (Calls FastAPI /api/v1/execute)
   const handleRun = useCallback(async () => {
+    // Prevent accidental duplicate submissions
+    if (isRunning) return;
+
     const lines = activeFile.content.split("\n").length;
     const bytes = new Blob([activeFile.content]).size;
     const now = new Date().toLocaleTimeString();
@@ -285,8 +289,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
 
     // Validate supported execution languages (C and Python)
     if (activeFile.language !== "c" && activeFile.language !== "python") {
-      setLogs((prev) => [
-        ...prev,
+      setLogs([
         {
           id: `run_unsupported_${Date.now()}`,
           type: "warning",
@@ -304,6 +307,9 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     }
 
     setIsRunning(true);
+    // Clear stale diagnostics from previous executions
+    setDiagnostics([]);
+
     setStatus({
       target: activeFile.language === "c" ? "C (GCC C11)" : "Python 3.13",
       state: "running",
@@ -313,15 +319,25 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       byteCount: bytes,
     });
 
-    setLogs((prev) => [
-      ...prev,
+    const initialRunLogs: OutputMessage[] = [
       {
         id: `run_start_${Date.now()}`,
         type: "status",
-        text: `[OneCompiler] Submitting "${activeFile.name}" to cloud execution sandbox (${lines} lines, ${bytes} bytes)...`,
+        text: `[OneCompiler Execution] Submitting "${activeFile.name}" to cloud sandbox (${lines} lines, ${bytes} bytes)...`,
         timestamp: now,
       },
-    ]);
+    ];
+
+    if (stdin && stdin.trim()) {
+      initialRunLogs.push({
+        id: `stdin_notice_${Date.now()}`,
+        type: "notice",
+        text: `[Input] Standard input (stdin) provided (${new Blob([stdin]).size} bytes).`,
+        timestamp: now,
+      });
+    }
+
+    setLogs(initialRunLogs);
 
     // Build payload with relevant project files for multi-file support
     const relevantFiles = files
@@ -340,6 +356,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       language: activeFile.language,
       code: activeFile.content,
       filename: activeFile.name,
+      stdin: stdin.trim() ? stdin : undefined,
       files: relevantFiles.length > 0 ? relevantFiles : undefined,
     };
 
@@ -539,7 +556,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     } finally {
       setIsRunning(false);
     }
-  }, [activeFile, files]);
+  }, [activeFile, files, isRunning, stdin]);
 
   // Handle Reset to Starter Template
   const handleReset = useCallback(() => {
@@ -619,6 +636,8 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
             onClearLogs={() => setLogs([])}
             isCollapsed={isOutputCollapsed}
             onToggleCollapse={() => setIsOutputCollapsed(!isOutputCollapsed)}
+            stdin={stdin}
+            onStdinChange={setStdin}
           />
         </div>
       </div>

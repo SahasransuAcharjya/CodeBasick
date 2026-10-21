@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Keyboard,
 } from "lucide-react";
 import {
   OutputMessage,
@@ -23,6 +24,8 @@ export interface OutputPanelProps {
   onClearLogs: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  stdin?: string;
+  onStdinChange?: (val: string) => void;
 }
 
 export function OutputPanel({
@@ -32,10 +35,12 @@ export function OutputPanel({
   onClearLogs,
   isCollapsed,
   onToggleCollapse,
+  stdin = "",
+  onStdinChange,
 }: OutputPanelProps) {
-  const [activeTab, setActiveTab] = useState<"output" | "diagnostics" | "status">(
-    "output"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "output" | "stdin" | "diagnostics" | "status"
+  >("output");
 
   return (
     <div
@@ -61,6 +66,25 @@ export function OutputPanel({
             <Terminal size={14} />
             <span>Output</span>
             {logs.length > 0 && <span>({logs.length})</span>}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "stdin"}
+            className={`${styles.tab} ${
+              activeTab === "stdin" ? styles.tabActive : ""
+            }`}
+            onClick={() => {
+              setActiveTab("stdin");
+              if (isCollapsed) onToggleCollapse();
+            }}
+          >
+            <Keyboard size={14} />
+            <span>Input</span>
+            {Boolean(stdin && stdin.trim()) && (
+              <span style={{ color: "var(--accent-text)", fontSize: "0.7rem" }}>(set)</span>
+            )}
           </button>
 
           <button
@@ -129,7 +153,7 @@ export function OutputPanel({
             <div>
               {logs.length === 0 ? (
                 <p className={styles.emptyState}>
-                  Terminal output is idle. Click &quot;Run&quot; above to check execution status.
+                  Terminal output is idle. Click &quot;Run&quot; above to execute code.
                 </p>
               ) : (
                 logs.map((msg) => (
@@ -139,6 +163,40 @@ export function OutputPanel({
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {activeTab === "stdin" && (
+            <div className={styles.stdinContainer}>
+              <div className={styles.stdinHeader}>
+                <span>Program Standard Input (stdin)</span>
+                {stdin ? (
+                  <button
+                    type="button"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      fontSize: "0.75rem",
+                    }}
+                    onClick={() => onStdinChange && onStdinChange("")}
+                  >
+                    Clear Input
+                  </button>
+                ) : (
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    Optional input passed to scanf() / input()
+                  </span>
+                )}
+              </div>
+              <textarea
+                className={styles.stdinTextarea}
+                placeholder="Type input passed to your program via standard input (e.g. for Python input() or C scanf)..."
+                value={stdin}
+                onChange={(e) => onStdinChange && onStdinChange(e.target.value)}
+                spellCheck={false}
+              />
             </div>
           )}
 

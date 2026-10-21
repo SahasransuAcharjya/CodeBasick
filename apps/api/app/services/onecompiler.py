@@ -118,7 +118,17 @@ class OneCompilerService:
                     )
 
                 response.raise_for_status()
-                data = response.json()
+
+                try:
+                    data = response.json()
+                    if not isinstance(data, dict):
+                        raise ValueError("Provider response payload is not a JSON object")
+                except Exception as parse_err:
+                    logger.error("Failed to parse OneCompiler response as JSON: %s", str(parse_err))
+                    raise ExecutionException(
+                        message="Received an unexpected or malformed response from the execution provider.",
+                        status_code=502,
+                    )
 
             except httpx.TimeoutException:
                 logger.warning(
@@ -133,6 +143,13 @@ class OneCompilerService:
                     stderr=None,
                     exception=f"Execution timed out after {self.settings.ONECOMPILER_TIMEOUT_SECONDS} seconds.",
                     message="The code execution provider timed out. Check for infinite loops or long-running operations.",
+                )
+
+            except httpx.HTTPStatusError as exc:
+                logger.error("OneCompiler HTTP status error: %d", exc.response.status_code)
+                raise ExecutionException(
+                    message=f"OneCompiler returned an error response (HTTP {exc.response.status_code}).",
+                    status_code=502,
                 )
 
             except httpx.RequestError as exc:

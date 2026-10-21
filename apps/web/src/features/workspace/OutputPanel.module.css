@@ -149,3 +149,40 @@
   color: var(--text-primary);
   font-weight: 500;
 }
+
+.stdinContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0.4rem;
+}
+
+.stdinHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.stdinTextarea {
+  flex: 1;
+  width: 100%;
+  min-height: 80px;
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.stdinTextarea:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}

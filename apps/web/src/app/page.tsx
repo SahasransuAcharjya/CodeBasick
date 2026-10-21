@@ -9,7 +9,6 @@ import {
   Trash2,
   ArrowRight,
   Sparkles,
-  Terminal,
   Cpu,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";

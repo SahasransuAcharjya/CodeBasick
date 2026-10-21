@@ -3,7 +3,7 @@
  * Provides real, honest client-side storage without fabricating server data.
  */
 
-import { Workspace, WorkspacePreferences, WorkspaceFile } from "@/types";
+import { Workspace, WorkspacePreferences } from "@/types";
 import { getStarterFileForLanguage } from "@/features/workspace/workspace.constants";
 
 const WORKSPACES_STORAGE_KEY = "codebasick_workspaces_v1";

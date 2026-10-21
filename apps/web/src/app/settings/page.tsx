@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Check, Sliders, Moon, Code } from "lucide-react";
+import { Check, Code } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Badge } from "@/components/ui";
 import { getPreferences, savePreferences } from "@/lib/storage";

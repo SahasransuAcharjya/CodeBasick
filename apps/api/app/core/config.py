@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     ONECOMPILER_HOST_HEADER: Optional[str] = None
     ONECOMPILER_TIMEOUT_SECONDS: float = 15.0
     MAX_SOURCE_CODE_SIZE_BYTES: int = 65536  # 64 KB limit
+    MAX_STDIN_SIZE_BYTES: int = 65536  # 64 KB limit
     MAX_CONCURRENT_EXECUTIONS: int = 5
 
     model_config = SettingsConfigDict(

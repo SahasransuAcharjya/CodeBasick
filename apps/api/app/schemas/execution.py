@@ -68,6 +68,15 @@ class ExecuteRequest(BaseModel):
                 f"Source code payload size ({total_size} bytes) exceeds maximum limit of {max_size} bytes (64 KB)."
             )
 
+        # 4. Validate standard input size (limit: 65,536 bytes)
+        if self.stdin is not None:
+            stdin_size = len(self.stdin.encode("utf-8"))
+            max_stdin_size = 65536  # 64 KB safety limit
+            if stdin_size > max_stdin_size:
+                raise ValueError(
+                    f"Standard input payload size ({stdin_size} bytes) exceeds maximum limit of {max_stdin_size} bytes (64 KB)."
+                )
+
         return self
 
 

@@ -385,3 +385,157 @@ def test_execute_multi_file_support(client: TestClient) -> None:
 
         _, kwargs = mock_post.call_args
         assert len(kwargs["json"]["files"]) == 3
+
+
+def test_execute_empty_output(client: TestClient) -> None:
+    """Test handling of code execution that produces no stdout."""
+    mock_response = httpx.Response(
+        status_code=200,
+        json={
+            "stdout": "",
+            "stderr": None,
+            "exception": None,
+            "status": "success",
+            "executionTime": 5,
+        },
+        request=httpx.Request("POST", "https://api.onecompiler.com/v1/run"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/v1/execute",
+            json={
+                "language": "python",
+                "code": "x = 10",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["stdout"] == ""
+
+
+def test_execute_oversized_stdin(client: TestClient) -> None:
+    """Test that stdin exceeding the 64 KB safety limit is rejected."""
+    huge_stdin = "input line\n" * 8000  # > 65,536 bytes
+    response = client.post(
+        "/api/v1/execute",
+        json={
+            "language": "python",
+            "code": "import sys; print(sys.stdin.read())",
+            "stdin": huge_stdin,
+        },
+    )
+    assert response.status_code == 422
+    assert "Standard input payload size" in response.text
+
+
+def test_execute_with_stdin_passthrough(client: TestClient) -> None:
+    """Test that valid stdin is correctly packaged and sent to OneCompiler."""
+    mock_response = httpx.Response(
+        status_code=200,
+        json={
+            "stdout": "Hello, Alice!\n",
+            "stderr": None,
+            "exception": None,
+            "status": "success",
+            "executionTime": 8,
+        },
+        request=httpx.Request("POST", "https://api.onecompiler.com/v1/run"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/v1/execute",
+            json={
+                "language": "python",
+                "code": "name = input(); print(f'Hello, {name}!')",
+                "stdin": "Alice",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["stdout"] == "Hello, Alice!\n"
+
+        _, kwargs = mock_post.call_args
+        assert kwargs["json"]["stdin"] == "Alice"
+
+
+def test_execute_malformed_non_json_provider_response(client: TestClient) -> None:
+    """Test handling when provider returns HTML or invalid non-JSON body."""
+    mock_response = httpx.Response(
+        status_code=200,
+        text="<html><body>502 Bad Gateway</body></html>",
+        headers={"content-type": "text/html"},
+        request=httpx.Request("POST", "https://api.onecompiler.com/v1/run"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/v1/execute",
+            json={
+                "language": "python",
+                "code": "print(1)",
+            },
+        )
+
+        assert response.status_code == 502
+        assert "unexpected or malformed response" in response.json()["error"].lower()
+
+
+def test_execute_unexpected_non_dict_provider_response(client: TestClient) -> None:
+    """Test handling when provider returns JSON that is not an object/dict."""
+    mock_response = httpx.Response(
+        status_code=200,
+        json=["invalid", "array", "format"],
+        request=httpx.Request("POST", "https://api.onecompiler.com/v1/run"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/v1/execute",
+            json={
+                "language": "c",
+                "code": "int main() { return 0; }",
+            },
+        )
+
+        assert response.status_code == 502
+        assert "unexpected or malformed response" in response.json()["error"].lower()
+
+
+def test_execute_secret_confidentiality(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    """Verify that configured API secrets never leak into client responses or server logs."""
+    secret = "test_mock_secret_api_key_12345"
+
+    mock_response = httpx.Response(
+        status_code=200,
+        json={
+            "stdout": "Secret verification passed\n",
+            "stderr": None,
+            "exception": None,
+            "status": "success",
+            "executionTime": 5,
+        },
+        request=httpx.Request("POST", "https://api.onecompiler.com/v1/run"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/v1/execute",
+            json={"language": "python", "code": "print('check')"},
+        )
+        assert response.status_code == 200
+        assert secret not in response.text
+        assert secret not in caplog.text
