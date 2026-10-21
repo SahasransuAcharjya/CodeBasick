@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     MAX_STDIN_SIZE_BYTES: int = 65536  # 64 KB limit
     MAX_CONCURRENT_EXECUTIONS: int = 5
 
+    # Google Gemini AI Settings
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/models"
+    GEMINI_TIMEOUT_SECONDS: float = 20.0
+    GEMINI_MAX_OUTPUT_TOKENS: int = 3000
+    MAX_AI_CONCURRENT_REQUESTS: int = 5
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
