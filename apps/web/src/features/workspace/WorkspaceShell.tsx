@@ -7,6 +7,7 @@ import {
   OutputMessage,
   DiagnosticItem,
   ExecutionStatusState,
+  ExecuteApiResponse,
 } from "./workspace.types";
 import {
   getStarterFileForLanguage,
@@ -47,6 +48,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   // Layout UI Toggles
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   // Preferences
   const [fontSize, setFontSize] = useState(14);
@@ -62,11 +64,11 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
-  const [diagnostics] = useState<DiagnosticItem[]>([]);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticItem[]>([]);
 
   // Execution Status State
   const [status, setStatus] = useState<ExecutionStatusState>({
-    target: language === "c" ? "GCC C11" : "Python 3.13",
+    target: language === "c" ? "C (GCC C11)" : "Python 3.13",
     state: "ready",
     lastRunAt: null,
     exitCode: null,
@@ -272,8 +274,8 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     [files, openFileIds, syncWorkspace]
   );
 
-  // Handle Run Button Click
-  const handleRun = useCallback(() => {
+  // Handle Run Button Click (Calls FastAPI /api/v1/execute)
+  const handleRun = useCallback(async () => {
     const lines = activeFile.content.split("\n").length;
     const bytes = new Blob([activeFile.content]).size;
     const now = new Date().toLocaleTimeString();
@@ -281,42 +283,263 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     // Expand output panel so feedback is immediately visible
     setIsOutputCollapsed(false);
 
-    // Provide clear, honest feedback
-    setLogs((prev) => [
-      ...prev,
-      {
-        id: `run_prep_${Date.now()}`,
-        type: "status",
-        text: `[Verification] Active file "${activeFile.name}" verified (${lines} lines, ${bytes} bytes).`,
-        timestamp: now,
-      },
-      {
-        id: `run_notice_${Date.now()}`,
-        type: "notice",
-        text: `[Runtime Target] ${
-          activeFile.language === "c"
-            ? "C (GCC C11 / Linux Sandbox)"
-            : "Python 3.13 (CPython Runtime)"
-        }`,
-        timestamp: now,
-      },
-      {
-        id: `run_phase5_${Date.now()}`,
-        type: "warning",
-        text: `[Execution Notice] In-browser code execution sandbox (Judge0 engine) is scheduled for Phase 5. In-process execution (eval/exec) is strictly prohibited for security.`,
-        timestamp: now,
-      },
-    ]);
+    // Validate supported execution languages (C and Python)
+    if (activeFile.language !== "c" && activeFile.language !== "python") {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `run_unsupported_${Date.now()}`,
+          type: "warning",
+          text: `[Language Note] OneCompiler remote execution currently supports C and Python. Language "${activeFile.language}" execution will arrive in a subsequent update.`,
+          timestamp: now,
+        },
+      ]);
+      setStatus((prev) => ({
+        ...prev,
+        state: "unconfigured",
+        lastRunAt: now,
+        message: `Language '${activeFile.language}' execution is not supported by OneCompiler runner.`,
+      }));
+      return;
+    }
 
+    setIsRunning(true);
     setStatus({
-      target: activeFile.language === "c" ? "GCC C11" : "Python 3.13",
-      state: "pending-phase5",
+      target: activeFile.language === "c" ? "C (GCC C11)" : "Python 3.13",
+      state: "running",
       lastRunAt: now,
       exitCode: null,
       lineCount: lines,
       byteCount: bytes,
     });
-  }, [activeFile]);
+
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `run_start_${Date.now()}`,
+        type: "status",
+        text: `[OneCompiler] Submitting "${activeFile.name}" to cloud execution sandbox (${lines} lines, ${bytes} bytes)...`,
+        timestamp: now,
+      },
+    ]);
+
+    // Build payload with relevant project files for multi-file support
+    const relevantFiles = files
+      .filter((f) => {
+        if (activeFile.language === "c") {
+          return f.name.endsWith(".c") || f.name.endsWith(".h");
+        }
+        if (activeFile.language === "python") {
+          return f.name.endsWith(".py");
+        }
+        return false;
+      })
+      .map((f) => ({ name: f.name, content: f.content }));
+
+    const payload = {
+      language: activeFile.language,
+      code: activeFile.content,
+      filename: activeFile.name,
+      files: relevantFiles.length > 0 ? relevantFiles : undefined,
+    };
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseTime = new Date().toLocaleTimeString();
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        const errorMsg =
+          errorData?.error ||
+          errorData?.message ||
+          `Execution request failed with HTTP ${res.status}`;
+
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `run_err_${Date.now()}`,
+            type: "error",
+            text: `[Provider Error] ${errorMsg}`,
+            timestamp: responseTime,
+          },
+        ]);
+
+        setStatus((prev) => ({
+          ...prev,
+          state: "error",
+          lastRunAt: responseTime,
+          message: errorMsg,
+        }));
+        return;
+      }
+
+      const data: ExecuteApiResponse = await res.json();
+
+      // Handle unconfigured API key
+      if (data.status === "unconfigured") {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `run_unconfigured_${Date.now()}`,
+            type: "warning",
+            text: `[Configuration Notice] ${
+              data.message ||
+              "OneCompiler API key is not configured on the backend server. Set ONECOMPILER_API_KEY in apps/api/.env to enable live execution."
+            }`,
+            timestamp: responseTime,
+          },
+        ]);
+        setStatus((prev) => ({
+          ...prev,
+          state: "unconfigured",
+          lastRunAt: responseTime,
+          message: data.message,
+        }));
+        return;
+      }
+
+      // Handle execution timeout
+      if (data.status === "timeout") {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `run_timeout_${Date.now()}`,
+            type: "error",
+            text: `[Execution Timeout] ${data.exception || "Execution timed out."}`,
+            timestamp: responseTime,
+          },
+        ]);
+        setStatus((prev) => ({
+          ...prev,
+          state: "timeout",
+          lastRunAt: responseTime,
+        }));
+        return;
+      }
+
+      // Display actual stdout if returned
+      if (data.stdout) {
+        const stdoutLines = data.stdout.replace(/\r\n/g, "\n").split("\n");
+        if (stdoutLines.length > 1 && stdoutLines[stdoutLines.length - 1] === "") {
+          stdoutLines.pop();
+        }
+        setLogs((prev) => [
+          ...prev,
+          ...stdoutLines.map((line, idx) => ({
+            id: `stdout_${Date.now()}_${idx}`,
+            type: "info" as const,
+            text: line,
+            timestamp: responseTime,
+          })),
+        ]);
+      }
+
+      // Display actual stderr if returned
+      if (data.stderr) {
+        const stderrLines = data.stderr.replace(/\r\n/g, "\n").split("\n");
+        if (stderrLines.length > 1 && stderrLines[stderrLines.length - 1] === "") {
+          stderrLines.pop();
+        }
+        setLogs((prev) => [
+          ...prev,
+          ...stderrLines.map((line, idx) => ({
+            id: `stderr_${Date.now()}_${idx}`,
+            type: "error" as const,
+            text: line,
+            timestamp: responseTime,
+          })),
+        ]);
+
+        // Parse compilation diagnostics if available
+        const newDiags: DiagnosticItem[] = [];
+        for (const line of stderrLines) {
+          const match = line.match(/^([^:]+):(\d+):(?:\d+:)?\s*(error|warning):\s*(.*)$/i);
+          if (match) {
+            newDiags.push({
+              id: `diag_${Date.now()}_${newDiags.length}`,
+              source: match[1],
+              line: parseInt(match[2], 10),
+              severity: match[3].toLowerCase() === "error" ? "error" : "warning",
+              message: match[4],
+            });
+          }
+        }
+        if (newDiags.length > 0) {
+          setDiagnostics((prev) => [...prev, ...newDiags]);
+        }
+      }
+
+      // Display runtime exception if returned
+      if (data.exception) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `exception_${Date.now()}`,
+            type: "error",
+            text: `[Runtime Exception] ${data.exception}`,
+            timestamp: responseTime,
+          },
+        ]);
+      }
+
+      // Provide completion summary if no stdout and no stderr
+      if (data.status === "success" && !data.stdout && !data.stderr) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `run_done_${Date.now()}`,
+            type: "status",
+            text: `[Execution Finished] Exit code 0 (no output produced).`,
+            timestamp: responseTime,
+          },
+        ]);
+      }
+
+      // Update final execution status metrics
+      setStatus({
+        target: activeFile.language === "c" ? "C (GCC C11)" : "Python 3.13",
+        state: data.status === "failed" ? "failed" : "success",
+        lastRunAt: responseTime,
+        exitCode: data.status === "success" ? 0 : 1,
+        lineCount: lines,
+        byteCount: bytes,
+        executionTime: data.executionTime,
+        compilationTime: data.compilationTime,
+        memoryUsed: data.memoryUsed,
+      });
+    } catch (networkErr: unknown) {
+      const errTime = new Date().toLocaleTimeString();
+      const errMessage =
+        networkErr instanceof Error ? networkErr.message : "Network error";
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `net_err_${Date.now()}`,
+          type: "error",
+          text: `[Connection Error] Could not connect to API server at ${apiUrl} (${errMessage}). Ensure the FastAPI server is running on port 8000.`,
+          timestamp: errTime,
+        },
+      ]);
+      setStatus((prev) => ({
+        ...prev,
+        state: "error",
+        lastRunAt: errTime,
+        message: errMessage,
+      }));
+    } finally {
+      setIsRunning(false);
+    }
+  }, [activeFile, files]);
 
   // Handle Reset to Starter Template
   const handleReset = useCallback(() => {
@@ -352,6 +575,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isOutputOpen={!isOutputCollapsed}
         onToggleOutput={() => setIsOutputCollapsed(!isOutputCollapsed)}
+        isRunning={isRunning}
       />
 
       {/* Main Workspace Body */}

@@ -233,9 +233,9 @@ export default function DashboardPage() {
                 Phase 5: Code Execution Sandbox
               </span>
               <p className={styles.roadmapDesc}>
-                Isolated execution environment running C and Python with live terminal streams and Judge0 API.
+                Isolated execution sandbox running C and Python via OneCompiler API with live output and diagnostics.
               </p>
-              <span className={styles.roadmapStatus}>Next Phase</span>
+              <span className={styles.roadmapStatus} style={{ color: "var(--accent-primary)", borderColor: "var(--accent-border)" }}>Active &amp; Ready</span>
             </div>
 
             <div className={styles.roadmapCard}>

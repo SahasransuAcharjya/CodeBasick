@@ -41,11 +41,38 @@ export interface DiagnosticItem {
   source: string;
 }
 
+export type ExecutionState =
+  | "idle"
+  | "ready"
+  | "running"
+  | "success"
+  | "failed"
+  | "timeout"
+  | "unconfigured"
+  | "error";
+
 export interface ExecutionStatusState {
   target: string;
-  state: "idle" | "ready" | "pending-phase5";
+  state: ExecutionState;
   lastRunAt: string | null;
   exitCode: number | string | null;
   lineCount: number;
   byteCount: number;
+  executionTime?: number | null;
+  compilationTime?: number | null;
+  memoryUsed?: number | null;
+  message?: string | null;
 }
+
+export interface ExecuteApiResponse {
+  stdout: string | null;
+  stderr: string | null;
+  exception: string | null;
+  status: "success" | "failed" | "error" | "timeout" | "unconfigured";
+  executionTime: number | null;
+  compilationTime: number | null;
+  memoryUsed: number | null;
+  language: string;
+  message?: string | null;
+}
+

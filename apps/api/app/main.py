@@ -42,6 +42,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
     )
 
+    # Bind active settings to FastAPI dependency injection
+    application.dependency_overrides[get_settings] = lambda: settings
+
     # Configure restricted CORS middleware
     application.add_middleware(
         CORSMiddleware,

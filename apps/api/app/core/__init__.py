@@ -3,6 +3,7 @@
 from app.core.config import Settings, clear_settings_cache, get_settings
 from app.core.exceptions import (
     AppException,
+    ExecutionException,
     NotFoundException,
     ValidationException,
     app_exception_handler,
@@ -18,6 +19,7 @@ __all__ = [
     "setup_logging",
     "logger",
     "AppException",
+    "ExecutionException",
     "NotFoundException",
     "ValidationException",
     "app_exception_handler",

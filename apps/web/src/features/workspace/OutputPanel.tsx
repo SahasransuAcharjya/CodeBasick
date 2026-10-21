@@ -167,26 +167,57 @@ export function OutputPanel({
               <span className={styles.statusLabel}>Runtime Target:</span>
               <span className={styles.statusValue}>{status.target}</span>
 
-              <span className={styles.statusLabel}>Sandbox Status:</span>
+              <span className={styles.statusLabel}>Execution Status:</span>
               <span className={styles.statusValue}>
-                {status.state === "pending-phase5"
-                  ? "Judge0 Sandbox Integration Pending (Phase 5)"
-                  : "Ready for Buffer Verification"}
+                {status.state === "running" && "Executing via OneCompiler Sandbox..."}
+                {status.state === "success" && "Execution Succeeded"}
+                {status.state === "failed" && "Execution Finished with Errors"}
+                {status.state === "timeout" && "Execution Timed Out"}
+                {status.state === "unconfigured" && "OneCompiler API Key Not Configured (Set ONECOMPILER_API_KEY in apps/api/.env)"}
+                {status.state === "error" && "Execution Request Error"}
+                {status.state === "ready" && "Ready for Execution"}
+                {status.state === "idle" && "Idle - Ready to execute"}
               </span>
+
+              {status.executionTime != null && (
+                <>
+                  <span className={styles.statusLabel}>Execution Time:</span>
+                  <span className={styles.statusValue}>{status.executionTime} ms</span>
+                </>
+              )}
+
+              {status.compilationTime != null && status.compilationTime > 0 && (
+                <>
+                  <span className={styles.statusLabel}>Compilation Time:</span>
+                  <span className={styles.statusValue}>{status.compilationTime} ms</span>
+                </>
+              )}
+
+              {status.memoryUsed != null && (
+                <>
+                  <span className={styles.statusLabel}>Memory Used:</span>
+                  <span className={styles.statusValue}>{status.memoryUsed} KB</span>
+                </>
+              )}
 
               <span className={styles.statusLabel}>Active Buffer:</span>
               <span className={styles.statusValue}>
                 {status.lineCount} lines ({status.byteCount} bytes)
               </span>
 
-              <span className={styles.statusLabel}>Last Verification:</span>
+              <span className={styles.statusLabel}>Last Run:</span>
               <span className={styles.statusValue}>
                 {status.lastRunAt || "None"}
               </span>
 
-              <span className={styles.statusLabel}>Execution Mode:</span>
+              <span className={styles.statusLabel}>Execution Provider:</span>
               <span className={styles.statusValue}>
-                Restricted Sandbox (In-Process execution prohibited)
+                OneCompiler Sandbox (api.onecompiler.com)
+              </span>
+
+              <span className={styles.statusLabel}>Security Mode:</span>
+              <span className={styles.statusValue}>
+                Remote Sandbox (In-Process execution prohibited)
               </span>
             </div>
           )}

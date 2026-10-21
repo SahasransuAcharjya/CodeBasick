@@ -80,14 +80,22 @@ CodeBasick/
 - **Language Switch**: Switching languages from C to Python (or vice versa) does NOT overwrite the active buffer. If an existing file matching the chosen language exists, it is activated. If not, a new starter file is added to the workspace.
 - **Tab State**: Users can open, switch, and close tabs. Active content edits are written directly to the in-memory/localStorage workspace model.
 
-### 3. Execution & Output Contract (`OutputPanel.tsx`)
-- **Run Button**: Operates with a truthful contract. It verifies the active buffer (computing lines and byte count), logs the target sandbox environment, and informs the user:
-  - Execution sandbox integration (Judge0) is scheduled for **Phase 5**.
-  - Strictly **no** client-side `eval`, backend `exec`, or unsafe local subprocess execution is performed.
+### 3. Execution & Output Contract (`OutputPanel.tsx` & `apps/api/app/services/onecompiler.py`)
+- **Remote Sandbox Engine**: Code execution is powered by **OneCompiler Code Execution API** (`https://api.onecompiler.com/v1/run` or RapidAPI proxy).
+- **Backend Proxy & Isolation**: The FastAPI backend acts as an authenticated, validating gateway. The provider API key is stored exclusively on the backend (`ONECOMPILER_API_KEY`) and is never sent to the browser, logged, or included in responses.
+- **Run Button Workflow**:
+  - Submits validated source code and project files to `POST /api/v1/execute`.
+  - Validates language (`c` or `python`) and code size (maximum 64 KB).
+  - Enforces request timeouts (15.0s) and concurrency limits.
+  - Streams actual stdout, stderr, and compiler diagnostics returned by the remote sandbox into the Output and Diagnostics panels.
+  - If unconfigured, provides a clear, honest notice instructing the administrator/user to set `ONECOMPILER_API_KEY`.
+- **Security Guarantees**:
+  - Strictly **no** client-side `eval()` or backend `exec()`, `eval()`, or subprocess execution.
+  - Untrusted code never executes on the host FastAPI server.
 - **Multi-Tab Output**:
-  - `Output`: Logs, buffer analysis, and sandbox execution readiness.
-  - `Diagnostics`: Compiler warnings, syntax issues, and error stream previews.
-  - `Status`: Runtime target (GCC C11 / Python 3.13), sandbox status, and buffer metrics.
+  - `Output`: Real-time execution logs, stdout, stderr, and submission telemetry.
+  - `Diagnostics`: Compiler warnings, syntax diagnostics, and error stream analysis.
+  - `Status`: Runtime target (GCC C11 / Python 3.13), execution status, timing metrics (execution & compilation time in ms), memory usage (KB), and security mode.
 
 ### 4. Responsiveness & Layout
 - **Desktop (>= 768px)**: 3-panel IDE layout with compact toolbar (48px), File Explorer sidebar (220px), central Monaco editor, and bottom output panel (240px). Explorer and Output can be individually collapsed.

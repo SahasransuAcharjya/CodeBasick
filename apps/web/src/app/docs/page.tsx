@@ -62,7 +62,7 @@ export default function DocsPage() {
           </CardHeader>
           <CardContent style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
             <p>
-              CodeBasick strictly isolates untrusted user code execution from the core API server. User-submitted code will run inside isolated execution containers (Judge0 engine) with tight CPU, memory, and timeout constraints.
+              CodeBasick strictly isolates untrusted user code execution from the core API server. User-submitted code runs inside isolated cloud execution sandboxes (OneCompiler engine) with strict memory, concurrency, and timeout constraints.
             </p>
             <p style={{ marginTop: "0.75rem" }}>
               The API never executes student code with in-process <code>eval()</code> or <code>exec()</code>, ensuring complete host system integrity.

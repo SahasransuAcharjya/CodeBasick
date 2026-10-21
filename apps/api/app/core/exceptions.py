@@ -49,6 +49,22 @@ class ValidationException(AppException):
         )
 
 
+class ExecutionException(AppException):
+    """Exception raised during external code execution operations."""
+
+    def __init__(
+        self,
+        message: str = "Code execution error.",
+        status_code: int = status.HTTP_502_BAD_GATEWAY,
+        details: Optional[Any] = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
+
+
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     """Handle custom application exceptions safely."""
     logger.warning("Application error: %s (status: %d)", exc.message, exc.status_code)

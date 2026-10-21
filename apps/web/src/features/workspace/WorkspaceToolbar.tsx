@@ -25,6 +25,7 @@ export interface WorkspaceToolbarProps {
   isOutputOpen: boolean;
   onToggleOutput: () => void;
   isRunDisabled?: boolean;
+  isRunning?: boolean;
 }
 
 export function WorkspaceToolbar({
@@ -38,6 +39,7 @@ export function WorkspaceToolbar({
   isOutputOpen,
   onToggleOutput,
   isRunDisabled = false,
+  isRunning = false,
 }: WorkspaceToolbarProps) {
   return (
     <header className={styles.toolbar}>
@@ -91,7 +93,7 @@ export function WorkspaceToolbar({
 
         <div className={styles.badgeWrapper}>
           <Badge variant="teal" withDot>
-            Phase 4 IDE
+            OneCompiler API
           </Badge>
         </div>
       </div>
@@ -115,6 +117,7 @@ export function WorkspaceToolbar({
           size="sm"
           leftIcon={<RotateCcw size={13} />}
           onClick={onReset}
+          disabled={isRunning}
           title="Reset current file to starter template"
         >
           Reset
@@ -123,12 +126,13 @@ export function WorkspaceToolbar({
         <Button
           variant="primary"
           size="sm"
-          leftIcon={<Play size={13} />}
+          leftIcon={!isRunning ? <Play size={13} /> : undefined}
+          isLoading={isRunning}
           onClick={onRun}
-          disabled={isRunDisabled}
-          title="Verify code buffer and check execution status"
+          disabled={isRunDisabled || isRunning}
+          title={isRunning ? "Executing code in remote sandbox..." : "Execute code via OneCompiler sandbox"}
         >
-          Run
+          {isRunning ? "Running..." : "Run"}
         </Button>
       </div>
     </header>

@@ -1,7 +1,7 @@
 """Application configuration and validated environment settings."""
 
 from functools import lru_cache
-from typing import List, Literal
+from typing import List, Literal, Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,6 +45,14 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    # OneCompiler Code Execution Settings
+    ONECOMPILER_API_KEY: Optional[str] = None
+    ONECOMPILER_BASE_URL: str = "https://api.onecompiler.com/v1/run"
+    ONECOMPILER_HOST_HEADER: Optional[str] = None
+    ONECOMPILER_TIMEOUT_SECONDS: float = 15.0
+    MAX_SOURCE_CODE_SIZE_BYTES: int = 65536  # 64 KB limit
+    MAX_CONCURRENT_EXECUTIONS: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

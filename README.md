@@ -104,12 +104,13 @@ pytest -v
 
 ---
 
-## Implemented Workspace Capabilities (Phase 4)
+## Implemented Workspace Capabilities (Phase 4 & 5)
 
 - **Monaco Editor Client-Side Integration**: Embedded Monaco Editor via `@monaco-editor/react` (v4.7.0) with dark charcoal palette `codebasick-dark`, monospace font, bracket matching, automatic indentation, and responsive resizing.
-- **Languages**: **C (GCC C11)** and **Python 3**, with distinct starter templates.
+- **Languages Supported**: **C (GCC C11)** and **Python 3**, with distinct starter templates.
 - **Buffer Safety**: Switching between languages or tabs maintains isolated in-memory source buffers. User edits are never silently overwritten.
 - **Multi-File Explorer**: Add and switch files (`.c`, `.h`, `.py`, `.js`, etc.) with extension validation and duplicate prevention.
-- **Output & Diagnostics Panel**: Real console with Output, Diagnostics, and Execution Status tabs.
-- **Honest Run Button**: Validates buffer metrics without fabricating fake execution output, confirming sandbox execution arrives with Judge0 in Phase 5.
+- **Output & Diagnostics Panel**: Real console with Output, Diagnostics, and Execution Status tabs, displaying real-time execution outputs, compiler errors, exceptions, and execution metrics.
+- **OneCompiler Code Execution Integration**: Dedicated backend proxy at `POST /api/v1/execute` connected to OneCompiler's cloud code execution engine. The Run button triggers remote sandbox compilation and execution.
+- **Security & Confidentiality**: The OneCompiler API key is strictly stored on the backend server (`ONECOMPILER_API_KEY`) and is never leaked to the client or logs. No untrusted student code executes directly on the host machine.
 - **Responsive Workspace**: Automatic sidebar collapse and overlay mode for mobile viewports (< 768px).
