@@ -69,10 +69,15 @@ class GeminiService:
         return text
 
     async def _call_gemini_api(self, prompt_text: str) -> Dict[str, Any]:
-        """Send asynchronous request to Google Gemini API with timeouts and error handling."""
+        """Send asynchronous request to Google Gemini API with fallback models, timeouts, and error handling."""
         self._verify_api_key()
 
-        url = f"{self.settings.GEMINI_BASE_URL.rstrip('/')}/{self.settings.GEMINI_MODEL}:generateContent"
+        # Build candidate models list: primary configured model followed by fallback models
+        candidate_models = [self.settings.GEMINI_MODEL]
+        for fb in getattr(self.settings, "GEMINI_FALLBACK_MODELS", []):
+            if fb and fb not in candidate_models:
+                candidate_models.append(fb)
+
         headers = {
             "x-goog-api-key": self.settings.GEMINI_API_KEY,
             "Content-Type": "application/json",
@@ -96,120 +101,152 @@ class GeminiService:
         }
 
         async with self._semaphore:
-            try:
-                timeout = httpx.Timeout(self.settings.GEMINI_TIMEOUT_SECONDS, connect=10.0)
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(url, json=payload, headers=headers)
-
-                if response.status_code == 401 or response.status_code == 403:
-                    logger.error("Gemini API authentication failed (HTTP %d).", response.status_code)
-                    raise AIServiceException(
-                        message="Gemini API authentication failed. Verify server GEMINI_API_KEY configuration.",
-                        status_code=502,
-                    )
-
-                if response.status_code == 429:
-                    logger.warning("Gemini API rate limit exceeded (HTTP 429).")
-                    raise AIServiceException(
-                        message="Gemini AI rate limit reached. Please wait a few moments and try again.",
-                        status_code=429,
-                    )
-
-                if response.status_code == 404:
-                    err_detail = ""
-                    try:
-                        err_payload = response.json()
-                        err_detail = err_payload.get("error", {}).get("message", "")
-                    except Exception:
-                        pass
-                    detail_str = f" ({err_detail})" if err_detail else ""
-                    logger.error("Gemini API model not found or unavailable (HTTP 404): %s", err_detail)
-                    raise AIServiceException(
-                        message=(
-                            f"Configured Gemini model '{self.settings.GEMINI_MODEL}' was not found or is unavailable{detail_str}. "
-                            "Verify GEMINI_MODEL in apps/api/.env."
-                        ),
-                        status_code=502,
-                    )
-
-                if response.status_code >= 500:
-                    err_detail = ""
-                    try:
-                        err_payload = response.json()
-                        err_detail = err_payload.get("error", {}).get("message", "")
-                    except Exception:
-                        pass
-                    detail_str = f": {err_detail}" if err_detail else "."
-                    logger.error("Gemini API provider returned server error: HTTP %d (detail: %s)", response.status_code, err_detail)
-                    raise AIServiceException(
-                        message=f"Gemini AI service encountered an upstream provider error (HTTP {response.status_code}){detail_str} Please try again later.",
-                        status_code=502,
-                    )
-
-                response.raise_for_status()
+            for idx, model_name in enumerate(candidate_models):
+                has_next = idx < len(candidate_models) - 1
+                url = f"{self.settings.GEMINI_BASE_URL.rstrip('/')}/{model_name}:generateContent"
 
                 try:
-                    data = response.json()
-                    if not isinstance(data, dict):
-                        raise ValueError("Provider response payload is not a JSON object")
-                except Exception as parse_err:
-                    logger.error("Failed to parse Gemini response as JSON: %s", str(parse_err))
+                    timeout = httpx.Timeout(self.settings.GEMINI_TIMEOUT_SECONDS, connect=10.0)
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 401 or response.status_code == 403:
+                        logger.error("Gemini API authentication failed (HTTP %d).", response.status_code)
+                        raise AIServiceException(
+                            message="Gemini API authentication failed. Verify server GEMINI_API_KEY configuration.",
+                            status_code=502,
+                        )
+
+                    if response.status_code == 429:
+                        err_detail = ""
+                        try:
+                            err_detail = response.json().get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        logger.warning("Gemini model %s rate limit exceeded (HTTP 429: %s).", model_name, err_detail)
+                        if has_next:
+                            logger.info("Attempting fallback to next Gemini model: %s", candidate_models[idx + 1])
+                            continue
+                        raise AIServiceException(
+                            message="Gemini AI rate limit reached. Please wait a few moments and try again.",
+                            status_code=429,
+                        )
+
+                    if response.status_code == 404:
+                        err_detail = ""
+                        try:
+                            err_detail = response.json().get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        logger.warning("Gemini model %s not found (HTTP 404: %s).", model_name, err_detail)
+                        if has_next:
+                            logger.info("Attempting fallback to next Gemini model: %s", candidate_models[idx + 1])
+                            continue
+                        detail_str = f" ({err_detail})" if err_detail else ""
+                        raise AIServiceException(
+                            message=(
+                                f"Configured Gemini model '{model_name}' was not found or is unavailable{detail_str}. "
+                                "Verify GEMINI_MODEL in apps/api/.env."
+                            ),
+                            status_code=502,
+                        )
+
+                    if response.status_code >= 500:
+                        err_detail = ""
+                        try:
+                            err_detail = response.json().get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        logger.warning("Gemini model %s returned provider error (HTTP %d: %s).", model_name, response.status_code, err_detail)
+                        if has_next:
+                            logger.info("Attempting fallback to next Gemini model: %s", candidate_models[idx + 1])
+                            continue
+                        detail_str = f": {err_detail}" if err_detail else "."
+                        raise AIServiceException(
+                            message=f"Gemini AI service encountered an upstream provider error (HTTP {response.status_code}){detail_str} Please try again later.",
+                            status_code=502,
+                        )
+
+                    response.raise_for_status()
+
+                    try:
+                        data = response.json()
+                        if not isinstance(data, dict):
+                            raise ValueError("Provider response payload is not a JSON object")
+                    except Exception as parse_err:
+                        logger.error("Failed to parse Gemini response as JSON: %s", str(parse_err))
+                        raise AIServiceException(
+                            message="Received an unexpected or malformed response from the Gemini AI service.",
+                            status_code=502,
+                        )
+
+                    # Extract generated content text
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        logger.error("Gemini response contained no candidates: %s", data.get("promptFeedback"))
+                        raise AIServiceException(
+                            message="Gemini AI produced no response candidates for the provided code.",
+                            status_code=502,
+                        )
+
+                    candidate = candidates[0]
+                    content_parts = candidate.get("content", {}).get("parts", [])
+                    if not content_parts or not content_parts[0].get("text"):
+                        logger.error("Gemini candidate parts were empty or missing text.")
+                        raise AIServiceException(
+                            message="Gemini AI returned an empty response.",
+                            status_code=502,
+                        )
+
+                    raw_text = content_parts[0]["text"]
+                    clean_text = self._clean_json_text(raw_text)
+
+                    try:
+                        parsed_result = json.loads(clean_text)
+                        if not isinstance(parsed_result, dict):
+                            raise ValueError("Parsed result is not a JSON object")
+                        parsed_result["_model"] = model_name
+                        return parsed_result
+                    except Exception as json_err:
+                        logger.error("Failed to parse model JSON content: %s", str(json_err))
+                        raise AIServiceException(
+                            message="Received a malformed structured response from the Gemini AI model.",
+                            status_code=502,
+                        )
+
+                except AIServiceException:
+                    raise
+
+                except httpx.TimeoutException:
+                    logger.warning("Gemini model %s timed out after %.1f seconds.", model_name, self.settings.GEMINI_TIMEOUT_SECONDS)
+                    if has_next:
+                        logger.info("Attempting fallback to next Gemini model: %s", candidate_models[idx + 1])
+                        continue
                     raise AIServiceException(
-                        message="Received an unexpected or malformed response from the Gemini AI service.",
+                        message="The Gemini AI service timed out. Please try again with a shorter code snippet.",
+                        status_code=504,
+                    )
+
+                except httpx.HTTPStatusError as exc:
+                    logger.error("Gemini API HTTP status error: %d", exc.response.status_code)
+                    if has_next:
+                        continue
+                    raise AIServiceException(
+                        message=f"Gemini API returned an error response (HTTP {exc.response.status_code}).",
                         status_code=502,
                     )
 
-            except httpx.TimeoutException:
-                logger.warning("Gemini AI request timed out after %.1f seconds.", self.settings.GEMINI_TIMEOUT_SECONDS)
-                raise AIServiceException(
-                    message="The Gemini AI service timed out. Please try again with a shorter code snippet.",
-                    status_code=504,
-                )
+                except httpx.RequestError as exc:
+                    logger.error("Connection error while calling Gemini API: %s", exc.__class__.__name__)
+                    if has_next:
+                        continue
+                    raise AIServiceException(
+                        message="Failed to connect to the Gemini AI service. Check your internet connection.",
+                        status_code=502,
+                    )
 
-            except httpx.HTTPStatusError as exc:
-                logger.error("Gemini API HTTP status error: %d", exc.response.status_code)
-                raise AIServiceException(
-                    message=f"Gemini API returned an error response (HTTP {exc.response.status_code}).",
-                    status_code=502,
-                )
-
-            except httpx.RequestError as exc:
-                logger.error("Connection error while calling Gemini API: %s", exc.__class__.__name__)
-                raise AIServiceException(
-                    message="Failed to connect to the Gemini AI service. Check your internet connection.",
-                    status_code=502,
-                )
-
-        # Extract generated content text
-        candidates = data.get("candidates", [])
-        if not candidates:
-            logger.error("Gemini response contained no candidates: %s", data.get("promptFeedback"))
             raise AIServiceException(
-                message="Gemini AI produced no response candidates for the provided code.",
-                status_code=502,
-            )
-
-        candidate = candidates[0]
-        content_parts = candidate.get("content", {}).get("parts", [])
-        if not content_parts or not content_parts[0].get("text"):
-            logger.error("Gemini candidate parts were empty or missing text.")
-            raise AIServiceException(
-                message="Gemini AI returned an empty response.",
-                status_code=502,
-            )
-
-        raw_text = content_parts[0]["text"]
-        clean_text = self._clean_json_text(raw_text)
-
-        try:
-            parsed_result = json.loads(clean_text)
-            if not isinstance(parsed_result, dict):
-                raise ValueError("Parsed result is not a JSON object")
-            return parsed_result
-        except Exception as json_err:
-            logger.error("Failed to parse model JSON content: %s", str(json_err))
-            raise AIServiceException(
-                message="Received a malformed structured response from the Gemini AI model.",
+                message="All available Gemini AI models failed to produce a response. Please try again later.",
                 status_code=502,
             )
 
@@ -260,7 +297,7 @@ class GeminiService:
             steps=validated_steps,
             limitations=result_dict.get("limitations"),
             is_incomplete=bool(result_dict.get("is_incomplete", False)),
-            model=self.settings.GEMINI_MODEL,
+            model=result_dict.get("_model", self.settings.GEMINI_MODEL),
         )
 
     async def generate_explanation(self, request: ExplainRequest) -> ExplainResponse:
@@ -343,7 +380,7 @@ class GeminiService:
                 "Always verify against compiler diagnostics."
             ),
             is_incomplete=bool(result_dict.get("is_incomplete", False)),
-            model=self.settings.GEMINI_MODEL,
+            model=result_dict.get("_model", self.settings.GEMINI_MODEL),
         )
 
 
