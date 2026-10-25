@@ -57,9 +57,9 @@ class Settings(BaseSettings):
 
     # Google Gemini AI Settings
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/models"
-    GEMINI_TIMEOUT_SECONDS: float = 20.0
+    GEMINI_TIMEOUT_SECONDS: float = 25.0
     GEMINI_MAX_OUTPUT_TOKENS: int = 3000
     MAX_AI_CONCURRENT_REQUESTS: int = 5
 

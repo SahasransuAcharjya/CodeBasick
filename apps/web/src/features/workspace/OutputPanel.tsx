@@ -603,7 +603,7 @@ export function OutputPanel({
 
               <span className={styles.statusLabel}>AI Tutor Provider:</span>
               <span className={styles.statusValue}>
-                Google Gemini API (gemini-2.5-flash)
+                Google Gemini API ({pseudocodeData?.model || explainData?.model || "gemini-3.5-flash"})
               </span>
 
               <span className={styles.statusLabel}>Security Mode:</span>

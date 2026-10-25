@@ -115,10 +115,34 @@ class GeminiService:
                         status_code=429,
                     )
 
-                if response.status_code >= 500:
-                    logger.error("Gemini API provider returned server error: HTTP %d", response.status_code)
+                if response.status_code == 404:
+                    err_detail = ""
+                    try:
+                        err_payload = response.json()
+                        err_detail = err_payload.get("error", {}).get("message", "")
+                    except Exception:
+                        pass
+                    detail_str = f" ({err_detail})" if err_detail else ""
+                    logger.error("Gemini API model not found or unavailable (HTTP 404): %s", err_detail)
                     raise AIServiceException(
-                        message="Gemini AI service encountered a temporary upstream error. Please try again later.",
+                        message=(
+                            f"Configured Gemini model '{self.settings.GEMINI_MODEL}' was not found or is unavailable{detail_str}. "
+                            "Verify GEMINI_MODEL in apps/api/.env."
+                        ),
+                        status_code=502,
+                    )
+
+                if response.status_code >= 500:
+                    err_detail = ""
+                    try:
+                        err_payload = response.json()
+                        err_detail = err_payload.get("error", {}).get("message", "")
+                    except Exception:
+                        pass
+                    detail_str = f": {err_detail}" if err_detail else "."
+                    logger.error("Gemini API provider returned server error: HTTP %d (detail: %s)", response.status_code, err_detail)
+                    raise AIServiceException(
+                        message=f"Gemini AI service encountered an upstream provider error (HTTP {response.status_code}){detail_str} Please try again later.",
                         status_code=502,
                     )
 

@@ -17,7 +17,7 @@ def test_settings() -> Settings:
         ENVIRONMENT="test",
         DEBUG=False,
         GEMINI_API_KEY="test_gemini_secret_api_key_98765",
-        GEMINI_MODEL="gemini-2.5-flash",
+        GEMINI_MODEL="gemini-3.5-flash",
         GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models",
         GEMINI_TIMEOUT_SECONDS=5.0,
     )
@@ -111,7 +111,7 @@ def test_pseudocode_python_success(client: TestClient) -> None:
     mock_response = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -131,7 +131,7 @@ def test_pseudocode_python_success(client: TestClient) -> None:
         assert data["steps"][0]["step_number"] == 1
         assert data["steps"][0]["label"] == "Initialize Sum"
         assert data["is_incomplete"] is False
-        assert data["model"] == "gemini-2.5-flash"
+        assert data["model"] == "gemini-3.5-flash"
 
         # Verify auth header was passed to Gemini
         _, kwargs = mock_post.call_args
@@ -166,7 +166,7 @@ def test_pseudocode_c_success(client: TestClient) -> None:
     mock_response = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -222,7 +222,7 @@ def test_explain_python_success(client: TestClient) -> None:
     mock_response = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -305,7 +305,7 @@ def test_explain_c_success(client: TestClient) -> None:
     mock_response = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -353,7 +353,7 @@ def test_ai_provider_auth_failure(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=403,
         json={"error": {"message": "API key not valid. Please pass a valid API key."}},
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -368,7 +368,7 @@ def test_ai_provider_rate_limit(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=429,
         json={"error": {"message": "Resource has been exhausted (e.g. check quota)."}},
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -383,14 +383,35 @@ def test_ai_provider_server_error(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=500,
         text="Internal Server Error",
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_resp
         resp = client.post("/api/v1/ai/pseudocode", json={"language": "python", "code": "x = 1"})
         assert resp.status_code == 502
-        assert "upstream error" in resp.json()["error"].lower()
+        assert "upstream provider error" in resp.json()["error"].lower()
+
+
+def test_ai_provider_404_model_not_found(client: TestClient) -> None:
+    """Test handling of HTTP 404 when model is unavailable or discontinued."""
+    mock_resp = httpx.Response(
+        status_code=404,
+        json={
+            "error": {
+                "code": 404,
+                "message": "This model is no longer available to new users.",
+                "status": "NOT_FOUND",
+            }
+        },
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        resp = client.post("/api/v1/ai/pseudocode", json={"language": "python", "code": "x = 1"})
+        assert resp.status_code == 502
+        assert "not found or is unavailable" in resp.json()["error"].lower()
 
 
 def test_ai_provider_timeout(client: TestClient) -> None:
@@ -424,7 +445,7 @@ def test_ai_malformed_non_json_response(client: TestClient) -> None:
                 }
             ]
         },
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -439,7 +460,7 @@ def test_ai_empty_candidate_response(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=200,
         json={"candidates": []},
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -484,7 +505,7 @@ def test_ai_prompt_injection_defense(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -518,7 +539,7 @@ def test_ai_secret_confidentiality(client: TestClient) -> None:
                 }
             ]
         },
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
@@ -572,7 +593,7 @@ def test_explain_incomplete_code(client: TestClient) -> None:
     mock_resp = httpx.Response(
         status_code=200,
         json=mock_gemini_payload,
-        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+        request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
     )
 
     with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
