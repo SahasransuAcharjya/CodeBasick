@@ -4,9 +4,11 @@ import React from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  BookOpen,
   Play,
   RotateCcw,
   Sidebar as SidebarIcon,
+  Sparkles,
   Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -20,12 +22,16 @@ export interface WorkspaceToolbarProps {
   onLanguageChange: (lang: ProgrammingLanguage) => void;
   onRun: () => void;
   onReset: () => void;
+  onGeneratePseudocode?: () => void;
+  onExplainCode?: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   isOutputOpen: boolean;
   onToggleOutput: () => void;
   isRunDisabled?: boolean;
   isRunning?: boolean;
+  isGeneratingPseudocode?: boolean;
+  isGeneratingExplanation?: boolean;
 }
 
 export function WorkspaceToolbar({
@@ -34,12 +40,16 @@ export function WorkspaceToolbar({
   onLanguageChange,
   onRun,
   onReset,
+  onGeneratePseudocode,
+  onExplainCode,
   isSidebarOpen,
   onToggleSidebar,
   isOutputOpen,
   onToggleOutput,
   isRunDisabled = false,
   isRunning = false,
+  isGeneratingPseudocode = false,
+  isGeneratingExplanation = false,
 }: WorkspaceToolbarProps) {
   return (
     <header className={styles.toolbar}>
@@ -117,11 +127,39 @@ export function WorkspaceToolbar({
           size="sm"
           leftIcon={<RotateCcw size={13} />}
           onClick={onReset}
-          disabled={isRunning}
+          disabled={isRunning || isGeneratingPseudocode || isGeneratingExplanation}
           title="Reset current file to starter template"
         >
           Reset
         </Button>
+
+        {onGeneratePseudocode && (
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Sparkles size={13} color="var(--accent-text)" />}
+            isLoading={isGeneratingPseudocode}
+            onClick={onGeneratePseudocode}
+            disabled={isGeneratingPseudocode || isGeneratingExplanation || isRunning}
+            title="Generate beginner-friendly pseudocode with Gemini AI"
+          >
+            {isGeneratingPseudocode ? "Translating..." : "Generate Pseudocode"}
+          </Button>
+        )}
+
+        {onExplainCode && (
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<BookOpen size={13} color="var(--accent-text)" />}
+            isLoading={isGeneratingExplanation}
+            onClick={onExplainCode}
+            disabled={isGeneratingExplanation || isGeneratingPseudocode || isRunning}
+            title="Generate line-by-line code explanation with Gemini AI"
+          >
+            {isGeneratingExplanation ? "Explaining..." : "Explain Code"}
+          </Button>
+        )}
 
         <Button
           variant="primary"

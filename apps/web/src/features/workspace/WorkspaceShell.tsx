@@ -8,6 +8,8 @@ import {
   DiagnosticItem,
   ExecutionStatusState,
   ExecuteApiResponse,
+  PseudocodeApiResponse,
+  ExplainApiResponse,
 } from "./workspace.types";
 import {
   getStarterFileForLanguage,
@@ -18,7 +20,7 @@ import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { FileExplorer } from "./FileExplorer";
 import { EditorTabs } from "./EditorTabs";
 import { CodeEditor } from "./CodeEditor";
-import { OutputPanel } from "./OutputPanel";
+import { OutputPanel, OutputPanelTab } from "./OutputPanel";
 import styles from "./WorkspaceShell.module.css";
 
 export interface WorkspaceShellProps {
@@ -50,6 +52,16 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [stdin, setStdin] = useState("");
+  const [activeOutputTab, setActiveOutputTab] = useState<OutputPanelTab>("output");
+
+  // Gemini AI Tutoring States (Phase 6)
+  const [pseudocodeData, setPseudocodeData] = useState<PseudocodeApiResponse | null>(null);
+  const [isGeneratingPseudocode, setIsGeneratingPseudocode] = useState(false);
+  const [pseudocodeError, setPseudocodeError] = useState<string | null>(null);
+
+  const [explainData, setExplainData] = useState<ExplainApiResponse | null>(null);
+  const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
 
   // Preferences
   const [fontSize, setFontSize] = useState(14);
@@ -307,6 +319,8 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     }
 
     setIsRunning(true);
+    setActiveOutputTab("output");
+    setIsOutputCollapsed(false);
     // Clear stale diagnostics from previous executions
     setDiagnostics([]);
 
@@ -558,6 +572,126 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     }
   }, [activeFile, files, isRunning, stdin]);
 
+  // Handle Generate Pseudocode (Calls /api/v1/ai/pseudocode)
+  const handleGeneratePseudocode = useCallback(async () => {
+    if (isGeneratingPseudocode) return;
+
+    const trimmedCode = activeFile.content.trim();
+    if (!trimmedCode) {
+      setActiveOutputTab("pseudocode");
+      setIsOutputCollapsed(false);
+      setPseudocodeError("Please write or paste code in the editor before generating pseudocode.");
+      return;
+    }
+
+    if (activeFile.language !== "c" && activeFile.language !== "python") {
+      setActiveOutputTab("pseudocode");
+      setIsOutputCollapsed(false);
+      setPseudocodeError("Pseudocode generation is currently supported for C and Python only.");
+      return;
+    }
+
+    setIsGeneratingPseudocode(true);
+    setPseudocodeError(null);
+    setActiveOutputTab("pseudocode");
+    setIsOutputCollapsed(false);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/ai/pseudocode`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          language: activeFile.language,
+          code: activeFile.content,
+          filename: activeFile.name,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        const errorMsg =
+          errorData?.error ||
+          errorData?.message ||
+          `Pseudocode generation failed (HTTP ${res.status}).`;
+        setPseudocodeError(errorMsg);
+        return;
+      }
+
+      const data: PseudocodeApiResponse = await res.json();
+      setPseudocodeData(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      setPseudocodeError(`Could not connect to API server (${msg}). Ensure the FastAPI server is running on port 8000.`);
+    } finally {
+      setIsGeneratingPseudocode(false);
+    }
+  }, [activeFile, isGeneratingPseudocode]);
+
+  // Handle Explain Code (Calls /api/v1/ai/explain)
+  const handleExplainCode = useCallback(async () => {
+    if (isGeneratingExplanation) return;
+
+    const trimmedCode = activeFile.content.trim();
+    if (!trimmedCode) {
+      setActiveOutputTab("explanation");
+      setIsOutputCollapsed(false);
+      setExplainError("Please write or paste code in the editor before requesting an explanation.");
+      return;
+    }
+
+    if (activeFile.language !== "c" && activeFile.language !== "python") {
+      setActiveOutputTab("explanation");
+      setIsOutputCollapsed(false);
+      setExplainError("Line-by-line explanation is currently supported for C and Python only.");
+      return;
+    }
+
+    setIsGeneratingExplanation(true);
+    setExplainError(null);
+    setActiveOutputTab("explanation");
+    setIsOutputCollapsed(false);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/ai/explain`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          language: activeFile.language,
+          code: activeFile.content,
+          filename: activeFile.name,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        const errorMsg =
+          errorData?.error ||
+          errorData?.message ||
+          `Code explanation failed (HTTP ${res.status}).`;
+        setExplainError(errorMsg);
+        return;
+      }
+
+      const data: ExplainApiResponse = await res.json();
+      setExplainData(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      setExplainError(`Could not connect to API server (${msg}). Ensure the FastAPI server is running on port 8000.`);
+    } finally {
+      setIsGeneratingExplanation(false);
+    }
+  }, [activeFile, isGeneratingExplanation]);
+
   // Handle Reset to Starter Template
   const handleReset = useCallback(() => {
     if (
@@ -588,11 +722,15 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
         onLanguageChange={handleLanguageChange}
         onRun={handleRun}
         onReset={handleReset}
+        onGeneratePseudocode={handleGeneratePseudocode}
+        onExplainCode={handleExplainCode}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isOutputOpen={!isOutputCollapsed}
         onToggleOutput={() => setIsOutputCollapsed(!isOutputCollapsed)}
         isRunning={isRunning}
+        isGeneratingPseudocode={isGeneratingPseudocode}
+        isGeneratingExplanation={isGeneratingExplanation}
       />
 
       {/* Main Workspace Body */}
@@ -638,6 +776,16 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
             onToggleCollapse={() => setIsOutputCollapsed(!isOutputCollapsed)}
             stdin={stdin}
             onStdinChange={setStdin}
+            activeTab={activeOutputTab}
+            onTabChange={setActiveOutputTab}
+            pseudocodeData={pseudocodeData}
+            isGeneratingPseudocode={isGeneratingPseudocode}
+            pseudocodeError={pseudocodeError}
+            onRetryPseudocode={handleGeneratePseudocode}
+            explainData={explainData}
+            isGeneratingExplanation={isGeneratingExplanation}
+            explainError={explainError}
+            onRetryExplain={handleExplainCode}
           />
         </div>
       </div>

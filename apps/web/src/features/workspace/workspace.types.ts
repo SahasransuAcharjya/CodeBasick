@@ -76,3 +76,39 @@ export interface ExecuteApiResponse {
   message?: string | null;
 }
 
+export interface PseudocodeStep {
+  step_number: number;
+  label: string;
+  description: string;
+  line_reference?: string | null;
+}
+
+export interface PseudocodeApiResponse {
+  language: string;
+  summary: string;
+  pseudocode: string;
+  steps: PseudocodeStep[];
+  limitations?: string | null;
+  is_incomplete: boolean;
+  model: string;
+}
+
+export interface LineExplanationItem {
+  line_number: number;
+  code: string;
+  explanation: string;
+  concepts: string[];
+  caveats?: string | null;
+}
+
+export interface ExplainApiResponse {
+  language: string;
+  overview: string;
+  explanations: LineExplanationItem[];
+  caveats?: string | null;
+  disclaimer: string;
+  is_incomplete: boolean;
+  model: string;
+}
+
+
