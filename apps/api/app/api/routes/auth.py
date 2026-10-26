@@ -2,11 +2,12 @@
 
 import time
 import uuid
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.exceptions import ConflictException, UnauthorizedException
+from app.core.rate_limit import check_auth_rate_limit
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -59,10 +60,20 @@ def set_auth_cookie(response: Response, token: str) -> None:
 )
 async def register(
     payload: UserRegisterRequest,
+    request: Request,
     response: Response,
     user_repo: BaseUserRepository = Depends(get_user_repository),
 ) -> TokenResponse:
-    """Register a new user account with secure password hashing."""
+    """Register a new user account with secure password hashing and rate limiting."""
+    settings = get_settings()
+    client_ip = request.client.host if request.client else "unknown"
+    check_auth_rate_limit(
+        key=f"register:{client_ip}",
+        max_attempts=settings.AUTH_RATE_LIMIT_REGISTER_PER_MINUTE,
+        window_seconds=60,
+        action="registration",
+    )
+
     email = payload.email.strip().lower()
     existing = await user_repo.get_by_email(email)
     if existing:
@@ -106,11 +117,29 @@ async def register(
 )
 async def login(
     payload: UserLoginRequest,
+    request: Request,
     response: Response,
     user_repo: BaseUserRepository = Depends(get_user_repository),
 ) -> TokenResponse:
     """Authenticate user credentials and issue a verified JWT access token."""
+    settings = get_settings()
     email = payload.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Rate limit by client IP and by targeted email to prevent brute-force
+    check_auth_rate_limit(
+        key=f"login_ip:{client_ip}",
+        max_attempts=settings.AUTH_RATE_LIMIT_LOGIN_PER_MINUTE,
+        window_seconds=60,
+        action="login",
+    )
+    check_auth_rate_limit(
+        key=f"login_email:{email}",
+        max_attempts=settings.AUTH_RATE_LIMIT_LOGIN_PER_MINUTE,
+        window_seconds=60,
+        action="login",
+    )
+
     user = await user_repo.get_by_email(email)
 
     # Use generic credential error to prevent account enumeration
@@ -133,6 +162,7 @@ async def login(
     set_auth_cookie(response, token)
 
     return TokenResponse(access_token=token, token_type="bearer", user=user_resp)
+
 
 
 @router.post(
@@ -223,6 +253,9 @@ async def logout(response: Response) -> dict:
     response.delete_cookie(
         key=settings.AUTH_COOKIE_NAME,
         path="/",
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
         samesite=settings.AUTH_COOKIE_SAMESITE,
     )
     return {"status": "logged_out", "message": "Successfully logged out."}
+

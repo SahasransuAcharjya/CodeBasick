@@ -29,20 +29,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize session on mount
+  // Initialize session on mount via HttpOnly cookie
   useEffect(() => {
     let mounted = true;
     const initSession = async () => {
-      const existingToken = getAuthToken();
-      if (existingToken) {
-        setTokenState(existingToken);
+      try {
         const currentUser = await fetchCurrentUser();
         if (mounted) {
           setUser(currentUser);
+          setTokenState(getAuthToken());
         }
-      }
-      if (mounted) {
-        setIsLoading(false);
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setTokenState(null);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -51,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
     };
   }, []);
+
 
   const login = useCallback(async (payload: { email: string; password: string }) => {
     setIsLoading(true);
@@ -99,13 +105,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextValue = {
     user,
     token,
-    isAuthenticated: Boolean(user && token),
+    isAuthenticated: Boolean(user),
     isLoading,
     login,
     register,
     loginWithGoogle,
     logout,
   };
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

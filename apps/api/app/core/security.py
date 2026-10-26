@@ -75,7 +75,8 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     except jwt.InvalidIssuerError:
         raise UnauthorizedException(message="Invalid token issuer.")
     except jwt.PyJWTError as jwt_err:
-        raise UnauthorizedException(message=f"Invalid authentication token: {jwt_err}")
+        logger.warning("JWT verification error: %s", jwt_err)
+        raise UnauthorizedException(message="Invalid or tampered authentication token.")
 
 
 async def verify_google_id_token(id_token: str, client_id: Optional[str] = None) -> Dict[str, Any]:
@@ -85,6 +86,10 @@ async def verify_google_id_token(id_token: str, client_id: Optional[str] = None)
     """
     settings = get_settings()
     expected_client_id = client_id or settings.GOOGLE_CLIENT_ID
+    if not expected_client_id:
+        raise UnauthorizedException(
+            message="Google Sign-In is not configured on this server. Google Client ID is missing."
+        )
 
     url = f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
     try:
@@ -104,13 +109,13 @@ async def verify_google_id_token(id_token: str, client_id: Optional[str] = None)
     if issuer not in ("accounts.google.com", "https://accounts.google.com"):
         raise UnauthorizedException(message=f"Invalid Google token issuer '{issuer}'.")
 
-    # Validate audience if client ID is configured
-    if expected_client_id:
-        token_aud = data.get("aud")
-        if token_aud != expected_client_id:
-            raise UnauthorizedException(
-                message="Google token audience does not match configured Google Client ID."
-            )
+    # Validate audience against configured client ID
+    token_aud = data.get("aud")
+    if token_aud != expected_client_id:
+        raise UnauthorizedException(
+            message="Google token audience does not match configured Google Client ID."
+        )
+
 
     # Validate email
     email = data.get("email")

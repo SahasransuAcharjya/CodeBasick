@@ -79,6 +79,7 @@ function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest",
     "X-Client-Owner-ID": getClientOwnerId(),
   };
   const token = getAuthToken();
@@ -87,6 +88,7 @@ function getHeaders(): Record<string, string> {
   }
   return headers;
 }
+
 
 /**
  * Map backend project schema to frontend Workspace model.
@@ -355,12 +357,14 @@ export async function addProjectFile(
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/files`, {
       method: "POST",
       headers: getHeaders(),
+      credentials: "include",
       body: JSON.stringify({
         name: file.name,
         language: file.language,
         content: file.content || "",
       }),
     });
+
 
     if (res.ok) {
       const data = await res.json();

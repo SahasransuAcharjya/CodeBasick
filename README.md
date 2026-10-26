@@ -148,14 +148,17 @@ MONGODB_CONNECT_TIMEOUT_MS=5000
   - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.
   - `idx_updated_at`: descending index on `updated_at` for sorted project queries.
 
-- **Authentication & Secure Project Ownership (Phase 8)**:
+- **Authentication & Secure Project Ownership (Phase 8 & 8.1 Security Hardening)**:
   - **Account Registration & Login**: Full email/password registration (`POST /api/v1/auth/register`) with normalized lowercase emails, duplicate prevention, and bcrypt password hashing. User login (`POST /api/v1/auth/login`) with generic error messages preventing user enumeration.
-  - **Google Sign-In**: OpenID Connect token verification endpoint (`POST /api/v1/auth/google`) validating Google token signatures, issuer, audience, and verified email status. Protects against account hijacking by preventing unverified automatic linking of password-based accounts.
-  - **Secure Session Management**: Signed HS256 JWT access tokens with 7-day expiration and optional secure `HttpOnly` session cookie (`cb_auth_token`, `SameSite=Lax`). Real logout endpoint (`POST /api/v1/auth/logout`) that invalidates cookie credentials.
+  - **No Long-Lived Storage in LocalStorage**: Authentication tokens are NEVER stored in browser `localStorage` or `sessionStorage`. Browser session state is maintained securely via `HttpOnly`, `SameSite=Lax` cookies. Page refreshes query `/api/v1/auth/me` with `credentials: "include"`, ensuring zero client-side token exposure to XSS.
+  - **Strict CSRF Protection**: Dedicated `CSRFProtectionMiddleware` validates state-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`) when cookie authentication is present. Requests must come from trusted origins (`CORS_ORIGINS`) or include custom headers (`X-Requested-With: XMLHttpRequest`). Untrusted origins receive HTTP 403 Forbidden. Pure Bearer token requests remain supported for non-browser API clients.
+  - **In-Memory Rate Limiting**: Brute-force protection on `/login` (10 attempts/min per IP/email) and `/register` (5 attempts/min per IP). Exceeded thresholds return HTTP 429 Too Many Requests with retry-after guidance.
+  - **Google Sign-In**: OpenID Connect token verification endpoint (`POST /api/v1/auth/google`) validating Google token signatures, issuer, audience, and verified email status. Requires configured `GOOGLE_CLIENT_ID` and protects against account hijacking by preventing unverified automatic linking of password-based accounts.
+  - **Secure Session Management**: Signed HS256 JWT access tokens with 7-day expiration and secure `HttpOnly` session cookie (`cb_auth_token`). Real logout endpoint (`POST /api/v1/auth/logout`) that invalidates cookie credentials. In production, `AUTH_COOKIE_SECURE=True` is strictly enforced.
   - **Independent FastAPI Identity Verification**: FastAPI verifies credentials server-side via `get_current_user` dependency. Client-supplied headers (e.g. `X-Client-Owner-ID`) are untrusted and completely ignored for authorization.
   - **Protected Project & File APIs**: All project and sub-file routes enforce ownership scoped to the authenticated user ID. Cross-user access attempts return HTTP 404 (preventing info leakage), and unauthenticated requests return HTTP 401.
   - **Preserved Local Workspaces**: Anonymous local browser workspaces are preserved. When logged in, users can click "Import All to Cloud" to promote local workspaces into authenticated cloud projects.
-  - **New Users Collection & Indexes**: MongoDB `users` collection initialized with unique indexes on `id`, `email`, and sparse unique index on `google_sub`.
+  - **Users Collection & Indexes**: MongoDB `users` collection initialized with unique indexes on `id`, `email`, and sparse unique index on `google_sub`. Concurrent duplicate registrations are caught atomically at the database tier.
 
 ---
 
@@ -170,13 +173,17 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB_NAME=codebasick
 MONGODB_CONNECT_TIMEOUT_MS=5000
 
-# Authentication & Security (Phase 8)
+# Authentication & Security (Phase 8 & 8.1)
 AUTH_SECRET_KEY="replace-with-a-secure-random-secret-key-at-least-32-bytes"
 AUTH_ALGORITHM="HS256"
 AUTH_TOKEN_EXPIRE_MINUTES=10080
 AUTH_COOKIE_NAME="cb_auth_token"
-AUTH_COOKIE_SECURE=false # Set to true in HTTPS production
+AUTH_COOKIE_SECURE=false # Enforced True when ENVIRONMENT="production"
 AUTH_COOKIE_SAMESITE="lax"
+
+# In-Memory Rate Limiting
+AUTH_RATE_LIMIT_LOGIN_PER_MINUTE=10
+AUTH_RATE_LIMIT_REGISTER_PER_MINUTE=5
 
 # Google OAuth 2.0 / OpenID Connect (Optional for Google Sign-In)
 GOOGLE_CLIENT_ID=""
@@ -190,7 +197,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
 ```
 
 ### Running Tests:
-- Run complete backend test suite (106 automated tests):
+- Run complete backend test suite (122 automated tests):
   ```powershell
   cd apps/api
   pytest -v
@@ -200,10 +207,10 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
   cd apps/api
   pytest -v tests/test_mongodb_live.py
   ```
-- Run authentication and project authorization tests:
+- Run authentication and security audit tests:
   ```powershell
   cd apps/api
-  pytest -v tests/test_auth.py tests/test_project_authorization.py
+  pytest -v tests/test_auth.py tests/test_project_authorization.py tests/test_security_audit.py
   ```
 - Run frontend typecheck, linting, and production build:
   ```powershell
@@ -212,5 +219,6 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
   npm run lint
   npm run build
   ```
+
 
 

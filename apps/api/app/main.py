@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.api.routes.health import health_check
 from app.core.config import Settings, get_settings
+from app.core.csrf import CSRFProtectionMiddleware
 from app.core.exceptions import (
     AppException,
     app_exception_handler,
@@ -62,6 +63,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         allow_headers=settings.ALLOWED_HEADERS,
         expose_headers=["X-Storage-Backend"],
     )
+
+    # Configure strict CSRF protection on cookie-authenticated state changes
+    application.add_middleware(CSRFProtectionMiddleware)
+
 
     # Centralized exception handlers
     application.add_exception_handler(AppException, app_exception_handler)

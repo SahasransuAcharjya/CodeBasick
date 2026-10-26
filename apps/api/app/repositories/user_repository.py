@@ -7,8 +7,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 
+from app.core.exceptions import ConflictException
 from app.db.mongodb import get_database, is_mongodb_available
+
 
 logger = logging.getLogger("codebasick.user_repository")
 
@@ -76,7 +79,10 @@ class MongoUserRepository(BaseUserRepository):
         data["email"] = data["email"].strip().lower()
 
         insert_doc = copy.deepcopy(data)
-        await self.collection.insert_one(insert_doc)
+        try:
+            await self.collection.insert_one(insert_doc)
+        except DuplicateKeyError:
+            raise ConflictException(message="An account with this email address already exists. Please log in.")
         return self._clean_doc(data) or data
 
     async def update_user(self, user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -123,6 +129,9 @@ class InMemoryUserRepository(BaseUserRepository):
         norm_email = data["email"].strip().lower()
         data["email"] = norm_email
 
+        if norm_email in self._users_by_email:
+            raise ConflictException(message="An account with this email address already exists. Please log in.")
+
         uid = data["id"]
         self._users_by_id[uid] = data
         self._users_by_email[norm_email] = uid
@@ -130,6 +139,7 @@ class InMemoryUserRepository(BaseUserRepository):
             self._users_by_google_sub[str(data["google_sub"])] = uid
 
         return copy.deepcopy(data)
+
 
     async def update_user(self, user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         user = self._users_by_id.get(user_id)

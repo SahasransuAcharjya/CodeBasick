@@ -1,36 +1,35 @@
 /**
  * Client API for authentication, registration, login, and session management.
  * Communicates with FastAPI backend (/api/v1/auth).
+ *
+ * Security Note:
+ * Primary authentication is managed via secure, HttpOnly, SameSite session cookies.
+ * Authentication tokens are NEVER stored in browser localStorage or sessionStorage.
+ * An optional in-memory token reference is retained solely during the active page lifecycle.
  */
 
 import { User } from "@/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const AUTH_TOKEN_KEY = "codebasick_auth_token_v1";
 
+// Ephemeral in-memory token (never persisted to localStorage/sessionStorage)
 let inMemoryToken: string | null = null;
 
-export function getAuthToken(): string | null {
-  if (inMemoryToken) return inMemoryToken;
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (stored) {
-      inMemoryToken = stored;
-      return stored;
-    }
+// Clean up any legacy token that may have been saved in localStorage by earlier versions
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("codebasick_auth_token_v1");
+  } catch {
+    // Ignore storage errors in restricted contexts
   }
-  return null;
+}
+
+export function getAuthToken(): string | null {
+  return inMemoryToken;
 }
 
 export function setAuthToken(token: string | null): void {
   inMemoryToken = token;
-  if (typeof window !== "undefined") {
-    if (token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-    }
-  }
 }
 
 export interface AuthResponse {
@@ -65,6 +64,7 @@ export async function registerUser(payload: {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
     },
     credentials: "include",
     body: JSON.stringify(payload),
@@ -91,6 +91,7 @@ export async function loginUser(payload: {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
     },
     credentials: "include",
     body: JSON.stringify(payload),
@@ -114,6 +115,7 @@ export async function loginWithGoogle(idToken: string): Promise<{ user: User; to
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
     },
     credentials: "include",
     body: JSON.stringify({ id_token: idToken }),
@@ -132,16 +134,18 @@ export async function loginWithGoogle(idToken: string): Promise<{ user: User; to
 }
 
 export async function fetchCurrentUser(): Promise<User | null> {
-  const token = getAuthToken();
-  if (!token) return null;
-
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    };
+    if (inMemoryToken) {
+      headers["Authorization"] = `Bearer ${inMemoryToken}`;
+    }
+
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       credentials: "include",
     });
 
@@ -164,6 +168,9 @@ export async function logoutUser(): Promise<void> {
   try {
     await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
       method: "POST",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
       credentials: "include",
     });
   } catch (err) {

@@ -82,6 +82,18 @@ class ConflictException(AppException):
         )
 
 
+class RateLimitException(AppException):
+    """Rate limit exceeded exception (HTTP 429)."""
+
+    def __init__(self, message: str = "Too many requests. Please try again later.", details: Optional[Any] = None) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            details=details,
+        )
+
+
+
 class ExecutionException(AppException):
     """Exception raised during external code execution operations."""
 

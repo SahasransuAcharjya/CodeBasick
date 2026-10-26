@@ -73,15 +73,19 @@ class Settings(BaseSettings):
     MAX_PROJECT_FILE_SIZE_BYTES: int = 65536  # 64 KB per source file
     MAX_PROJECT_NAME_LENGTH: int = 100
 
-    # Authentication & Security Settings (Phase 8)
+    # Authentication & Security Settings (Phase 8 & 8.1)
     AUTH_SECRET_KEY: str = "cb_dev_secret_key_needs_replacement_in_production_32bytes_min_length_ok"
     AUTH_ALGORITHM: str = "HS256"
     AUTH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     AUTH_COOKIE_NAME: str = "cb_auth_token"
-    AUTH_COOKIE_SECURE: bool = False  # Set to True in HTTPS production
+    AUTH_COOKIE_SECURE: bool = False  # Enforced True in production
     AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
+
+    # Rate Limiting Settings
+    AUTH_RATE_LIMIT_LOGIN_PER_MINUTE: int = 10
+    AUTH_RATE_LIMIT_REGISTER_PER_MINUTE: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -99,6 +103,26 @@ class Settings(BaseSettings):
             raise ValueError("DEBUG must be set to False in production environment.")
         return v
 
+    @field_validator("AUTH_COOKIE_SECURE", mode="after")
+    @classmethod
+    def validate_cookie_secure(cls, v: bool, info) -> bool:
+        """Enforce Secure cookies in production environment."""
+        env = info.data.get("ENVIRONMENT")
+        if env == "production" and not v:
+            raise ValueError("AUTH_COOKIE_SECURE must be True in production environment.")
+        return v
+
+    @field_validator("AUTH_SECRET_KEY", mode="after")
+    @classmethod
+    def validate_auth_secret(cls, v: str, info) -> str:
+        """Ensure secret key is long enough and replaced in production."""
+        if len(v) < 32:
+            raise ValueError("AUTH_SECRET_KEY must be at least 32 characters long.")
+        env = info.data.get("ENVIRONMENT")
+        if env == "production" and "dev_secret_key" in v:
+            raise ValueError("AUTH_SECRET_KEY must be set to a secure unique secret in production.")
+        return v
+
     @field_validator("CORS_ORIGINS", mode="after")
     @classmethod
     def validate_cors_origins(cls, v: List[str], info) -> List[str]:
@@ -113,6 +137,7 @@ class Settings(BaseSettings):
                 raise ValueError("Wildcard '*' CORS origin is strictly forbidden in production.")
             cleaned_origins.append(clean)
         return cleaned_origins
+
 
 
 @lru_cache()
