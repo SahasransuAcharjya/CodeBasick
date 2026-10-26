@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, Plus } from "lucide-react";
 import { WorkspaceShell } from "@/features/workspace";
 import { Button } from "@/components/ui/Button";
-import { getWorkspaceById, createWorkspace } from "@/lib/storage";
+import { fetchProject, createProject } from "@/lib/projectApi";
 import { Workspace } from "@/types";
 
 function WorkspaceViewInner() {
@@ -17,17 +17,26 @@ function WorkspaceViewInner() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      const found = getWorkspaceById(id);
-      if (found) {
-        setWorkspace(found);
+    let isMounted = true;
+    async function load() {
+      if (id) {
+        const { workspace: found } = await fetchProject(id);
+        if (isMounted && found) {
+          setWorkspace(found);
+        }
+      }
+      if (isMounted) {
+        setIsLoading(false);
       }
     }
-    setIsLoading(false);
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
-  const handleCreateNew = () => {
-    const created = createWorkspace({
+  const handleCreateNew = async () => {
+    const created = await createProject({
       name: "Scratchpad Workspace",
       language: "python",
       description: "Quick coding scratchpad.",

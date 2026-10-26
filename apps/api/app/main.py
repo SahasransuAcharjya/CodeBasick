@@ -1,5 +1,4 @@
-"""Main application factory and entry point for CodeBasick FastAPI service."""
-
+from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +14,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import setup_logging
+from app.db.mongodb import mongo_manager
 from app.schemas.health import HealthResponse
 
 
@@ -33,6 +33,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # Configure application logging
     setup_logging(settings)
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Application lifecycle: manage database connection pool."""
+        await mongo_manager.connect(settings)
+        yield
+        await mongo_manager.close()
+
     application = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
@@ -40,6 +47,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
+        lifespan=lifespan,
     )
 
     # Bind active settings to FastAPI dependency injection

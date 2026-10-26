@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     GEMINI_MAX_OUTPUT_TOKENS: int = 3000
     MAX_AI_CONCURRENT_REQUESTS: int = 5
 
+    # MongoDB Atlas Persistent Storage Settings (Phase 7B)
+    MONGODB_URI: Optional[str] = None
+    MONGODB_DB_NAME: str = "codebasick"
+    MONGODB_CONNECT_TIMEOUT_MS: int = 5000
+    MAX_PROJECT_FILES: int = 25
+    MAX_PROJECT_FILE_SIZE_BYTES: int = 65536  # 64 KB per source file
+    MAX_PROJECT_NAME_LENGTH: int = 100
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

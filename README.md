@@ -104,7 +104,7 @@ pytest -v
 
 ---
 
-## Implemented Workspace Capabilities (Phase 4 & 5)
+## Implemented Capabilities (Phases 4 - 7B)
 
 - **Monaco Editor Client-Side Integration**: Embedded Monaco Editor via `@monaco-editor/react` (v4.7.0) with dark charcoal palette `codebasick-dark`, monospace font, bracket matching, automatic indentation, and responsive resizing.
 - **Languages Supported**: **C (GCC C11)** and **Python 3**, with distinct starter templates.
@@ -112,5 +112,40 @@ pytest -v
 - **Multi-File Explorer**: Add and switch files (`.c`, `.h`, `.py`, `.js`, etc.) with extension validation and duplicate prevention.
 - **Output & Diagnostics Panel**: Real console with Output, Diagnostics, and Execution Status tabs, displaying real-time execution outputs, compiler errors, exceptions, and execution metrics.
 - **OneCompiler Code Execution Integration**: Dedicated backend proxy at `POST /api/v1/execute` connected to OneCompiler's cloud code execution engine. The Run button triggers remote sandbox compilation and execution.
-- **Security & Confidentiality**: The OneCompiler API key is strictly stored on the backend server (`ONECOMPILER_API_KEY`) and is never leaked to the client or logs. No untrusted student code executes directly on the host machine.
-- **Responsive Workspace**: Automatic sidebar collapse and overlay mode for mobile viewports (< 768px).
+- **Gemini AI Tutoring (Phase 6)**: AI Pseudocode generation and line-by-line explanation using Google Gemini API (`POST /api/v1/ai/pseudocode` and `POST /api/v1/ai/explain`).
+- **AI Error Doctor & One-Click Fix (Phase 7A)**: Automatic syntax and runtime error diagnosis with interactive unified code diffs and undoable single-click editor fix application (`POST /api/v1/ai/diagnose-error`).
+- **Persistent Project Storage (Phase 7B)**:
+  - **Database Persistence**: Managed MongoDB Atlas connection via async `motor` driver with startup connection lifecycle, graceful fallback handling, and optimized indexes on `owner_id`, compound unique `(owner_id, id)`, and `updated_at`.
+  - **Project & File Management API**: RESTful CRUD endpoints (`POST /api/v1/projects`, `GET /api/v1/projects`, `GET /api/v1/projects/{id}`, `PUT /api/v1/projects/{id}`, `DELETE /api/v1/projects/{id}`, and sub-file routes).
+  - **Autosave & Editor Synchronization**: Debounced autosave (1.5s delay) with visual indicators (`Saved`, `Saving...`, `Save`, `Save Failed (Retry)`), keyboard shortcut `Ctrl+S`, project renaming modal, and zero data loss on file switching.
+  - **Tenant Isolation**: Protected client ownership model via `X-Client-Owner-ID` header generated per client workspace session, preventing cross-tenant access without exposing public unauthenticated project data.
+  - **Resilient Offline Fallback**: Dual-layer architecture: frontend writes synchronously to local cache (`localStorage`) and debounces asynchronous persistence to the FastAPI/MongoDB backend. If the backend or database is offline, local workspaces remain fully functional.
+
+---
+
+## Database Configuration (MongoDB Atlas)
+
+For production and persistent development storage, configure MongoDB Atlas in `apps/api/.env`:
+
+```env
+# MongoDB Atlas Connection URI (Replace with your actual cluster URI)
+# Format: mongodb+srv://<username>:<password>@<cluster-address>/<dbname>?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://db_user:YOUR_SECRET_PASSWORD@cluster0.example.mongodb.net/?retryWrites=true&w=majority
+
+# MongoDB Database Name
+MONGODB_DB_NAME=codebasick
+
+# Connection timeout in milliseconds (defaults to 5000)
+MONGODB_CONNECT_TIMEOUT_MS=5000
+```
+
+### Database Behavior & Safety:
+- **Server-Side Only**: MongoDB credentials are strictly kept in `apps/api/.env` and are never exposed to the Next.js frontend or browser.
+- **Connection Lifecycle**: Initialized asynchronously during FastAPI application startup (`lifespan` context) and properly closed on shutdown.
+- **Graceful Unreachability**: If `MONGODB_URI` is left unconfigured or MongoDB Atlas is temporarily unreachable, FastAPI gracefully logs a warning and falls back to the in-memory/local repository without crashing the API or blocking code execution or AI tutoring features.
+- **Ephemeral Filesystem Warning**: Avoid storing persistent projects on ephemeral container filesystems (e.g. Heroku or Render free dyno ephemeral disks) which wipe on restart. Always connect to a persistent managed database like MongoDB Atlas.
+- **Indexes Created**:
+  - `idx_owner_id`: single index on `owner_id` for fast listing by user/client.
+  - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.
+  - `idx_updated_at`: descending index on `updated_at` for sorted project queries.
+

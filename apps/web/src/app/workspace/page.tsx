@@ -2,23 +2,33 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getWorkspaces, createWorkspace } from "@/lib/storage";
+import { fetchProjects, createProject } from "@/lib/projectApi";
 
 export default function WorkspaceIndexPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const list = getWorkspaces();
-    if (list.length > 0) {
-      router.replace(`/workspace/${list[0].id}`);
-    } else {
-      const created = createWorkspace({
-        name: "Default Workspace",
-        language: "python",
-        description: "Initial coding workspace.",
-      });
-      router.replace(`/workspace/${created.id}`);
+    let isMounted = true;
+    async function initWorkspace() {
+      const res = await fetchProjects();
+      if (!isMounted) return;
+      if (res.items.length > 0) {
+        router.replace(`/workspace/${res.items[0].id}`);
+      } else {
+        const created = await createProject({
+          name: "Default Workspace",
+          language: "python",
+          description: "Initial coding workspace.",
+        });
+        if (isMounted) {
+          router.replace(`/workspace/${created.id}`);
+        }
+      }
     }
+    initWorkspace();
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   return (

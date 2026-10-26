@@ -18,6 +18,7 @@ import {
   STARTER_SNIPPETS,
 } from "./workspace.constants";
 import { updateWorkspace, getPreferences } from "@/lib/storage";
+import { updateProject as updateRemoteProject } from "@/lib/projectApi";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { FileExplorer } from "./FileExplorer";
 import { EditorTabs } from "./EditorTabs";
@@ -75,6 +76,28 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   const [diagnosedFileId, setDiagnosedFileId] = useState<string | null>(null);
   const [isFixApplied, setIsFixApplied] = useState(false);
 
+  // Phase 7B: Persistent Storage & Autosave States
+  const [workspaceName, setWorkspaceName] = useState(initialWorkspace.name);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(
+    initialWorkspace.updatedAt ? new Date(initialWorkspace.updatedAt).toLocaleTimeString() : null
+  );
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const latestSaveSeqRef = useRef<number>(0);
+  const pendingWorkspaceRef = useRef<{
+    files: WorkspaceFile[];
+    activeFileId: string;
+    openFileIds: string[];
+    language: ProgrammingLanguage;
+    name: string;
+  }>({
+    files: initialFiles,
+    activeFileId: initialWorkspace.activeFileId || initialFiles[0].id,
+    openFileIds: initialWorkspace.openFileIds || [initialFiles[0].id],
+    language: initialWorkspace.language,
+    name: initialWorkspace.name,
+  });
+
   // Preferences
   const [fontSize, setFontSize] = useState(14);
   const [tabSize, setTabSize] = useState(4);
@@ -112,26 +135,126 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     }
   }, []);
 
+  // Perform persistent save to backend database & local cache
+  const triggerSave = useCallback(
+    (immediate = false) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+
+      const executeSave = async () => {
+        const seq = ++latestSaveSeqRef.current;
+        setSaveStatus("saving");
+        const currentData = pendingWorkspaceRef.current;
+
+        try {
+          await updateRemoteProject(initialWorkspace.id, {
+            name: currentData.name,
+            files: currentData.files,
+            activeFileId: currentData.activeFileId,
+            openFileIds: currentData.openFileIds,
+            language: currentData.language,
+          });
+
+          if (latestSaveSeqRef.current === seq) {
+            setSaveStatus("saved");
+            setLastSavedAt(new Date().toLocaleTimeString());
+          }
+        } catch (err) {
+          console.error("Autosave failed:", err);
+          if (latestSaveSeqRef.current === seq) {
+            setSaveStatus("error");
+          }
+        }
+      };
+
+      if (immediate) {
+        executeSave();
+      } else {
+        setSaveStatus("unsaved");
+        saveTimeoutRef.current = setTimeout(executeSave, 1500);
+      }
+    },
+    [initialWorkspace.id]
+  );
+
   // Sync state changes with persistence
   const syncWorkspace = useCallback(
     (
       currentFiles: WorkspaceFile[],
       currentActiveId: string,
       currentOpenIds: string[],
-      currentLang: ProgrammingLanguage
+      currentLang: ProgrammingLanguage,
+      immediateSave = false
     ) => {
-      const updated: Workspace = {
+      pendingWorkspaceRef.current = {
+        files: currentFiles,
+        activeFileId: currentActiveId,
+        openFileIds: currentOpenIds,
+        language: currentLang,
+        name: workspaceName,
+      };
+
+      // Synchronously cache to local storage for zero-data-loss resiliency
+      updateWorkspace({
         ...initialWorkspace,
+        name: workspaceName,
         files: currentFiles,
         activeFileId: currentActiveId,
         openFileIds: currentOpenIds,
         language: currentLang,
         fileCount: currentFiles.length,
-      };
-      updateWorkspace(updated);
+      });
+
+      // Trigger debounced (or immediate) backend save
+      triggerSave(immediateSave);
     },
-    [initialWorkspace]
+    [initialWorkspace, workspaceName, triggerSave]
   );
+
+  // Manual save handler (Ctrl+S or Save button)
+  const handleManualSave = useCallback(() => {
+    triggerSave(true);
+  }, [triggerSave]);
+
+  // Project rename handler
+  const handleRenameWorkspace = useCallback(
+    async (newName: string) => {
+      const clean = newName.trim();
+      if (!clean) return;
+      setWorkspaceName(clean);
+      pendingWorkspaceRef.current.name = clean;
+      setSaveStatus("saving");
+      await updateRemoteProject(initialWorkspace.id, {
+        name: clean,
+        files,
+        activeFileId,
+        openFileIds,
+        language,
+      });
+      setSaveStatus("saved");
+      setLastSavedAt(new Date().toLocaleTimeString());
+    },
+    [initialWorkspace.id, files, activeFileId, openFileIds, language]
+  );
+
+  // Keyboard shortcut for manual save (Ctrl+S / Cmd+S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleManualSave();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [handleManualSave]);
 
   // Active File Reference
   const activeFile = useMemo(() => {
@@ -897,7 +1020,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     <div className={styles.shell}>
       {/* Top Toolbar */}
       <WorkspaceToolbar
-        workspaceName={initialWorkspace.name}
+        workspaceName={workspaceName}
         language={language}
         onLanguageChange={handleLanguageChange}
         onRun={handleRun}
@@ -911,6 +1034,10 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
         isRunning={isRunning}
         isGeneratingPseudocode={isGeneratingPseudocode}
         isGeneratingExplanation={isGeneratingExplanation}
+        saveStatus={saveStatus}
+        onSave={handleManualSave}
+        lastSavedAt={lastSavedAt}
+        onRenameWorkspace={handleRenameWorkspace}
       />
 
       {/* Main Workspace Body */}

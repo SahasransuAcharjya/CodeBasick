@@ -27,10 +27,10 @@ import {
   Modal,
 } from "@/components/ui";
 import {
-  getWorkspaces,
-  createWorkspace,
-  deleteWorkspace,
-} from "@/lib/storage";
+  fetchProjects,
+  createProject,
+  deleteProject,
+} from "@/lib/projectApi";
 import { Workspace, ProgrammingLanguage } from "@/types";
 import styles from "./page.module.css";
 
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
   const [name, setName] = useState("");
@@ -46,38 +47,54 @@ export default function DashboardPage() {
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState("");
 
+  const loadData = async () => {
+    try {
+      const res = await fetchProjects();
+      setWorkspaces(res.items);
+    } catch (err) {
+      console.error("Failed to load projects:", err);
+    } finally {
+      setIsLoaded(true);
+    }
+  };
+
   useEffect(() => {
-    setWorkspaces(getWorkspaces());
-    setIsLoaded(true);
+    loadData();
   }, []);
 
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setFormError("Workspace name is required.");
       return;
     }
 
-    const created = createWorkspace({
-      name: name.trim(),
-      language,
-      description: description.trim(),
-    });
+    setIsSubmitting(true);
+    try {
+      const created = await createProject({
+        name: name.trim(),
+        language,
+        description: description.trim(),
+      });
 
-    setWorkspaces(getWorkspaces());
-    setIsModalOpen(false);
-    setName("");
-    setDescription("");
-    setFormError("");
+      setIsModalOpen(false);
+      setName("");
+      setDescription("");
+      setFormError("");
 
-    // Navigate to the newly created workspace
-    router.push(`/workspace/${created.id}`);
+      // Navigate to the newly created workspace
+      router.push(`/workspace/${created.id}`);
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to create project");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = (id: string, workspaceName: string) => {
+  const handleDelete = async (id: string, workspaceName: string) => {
     if (window.confirm(`Are you sure you want to delete "${workspaceName}"?`)) {
-      deleteWorkspace(id);
-      setWorkspaces(getWorkspaces());
+      await deleteProject(id);
+      await loadData();
     }
   };
 
@@ -270,8 +287,12 @@ export default function DashboardPage() {
             >
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleCreateWorkspace}>
-              Create &amp; Open
+            <Button
+              variant="primary"
+              onClick={handleCreateWorkspace}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Creating..." : "Create & Open"}
             </Button>
           </>
         }

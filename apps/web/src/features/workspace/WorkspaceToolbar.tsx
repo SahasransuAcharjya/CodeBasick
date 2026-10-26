@@ -1,6 +1,4 @@
-"use client";
-
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -10,9 +8,16 @@ import {
   Sidebar as SidebarIcon,
   Sparkles,
   Terminal,
+  Check,
+  Loader2,
+  CloudUpload,
+  AlertCircle,
+  Edit2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
 import { ProgrammingLanguage } from "./workspace.types";
 import styles from "./WorkspaceToolbar.module.css";
 
@@ -32,6 +37,11 @@ export interface WorkspaceToolbarProps {
   isRunning?: boolean;
   isGeneratingPseudocode?: boolean;
   isGeneratingExplanation?: boolean;
+  // Phase 7B: Persistent Storage & Autosave
+  saveStatus?: "saved" | "saving" | "unsaved" | "error";
+  onSave?: () => void;
+  lastSavedAt?: string | null;
+  onRenameWorkspace?: (newName: string) => void;
 }
 
 export function WorkspaceToolbar({
@@ -50,10 +60,30 @@ export function WorkspaceToolbar({
   isRunning = false,
   isGeneratingPseudocode = false,
   isGeneratingExplanation = false,
+  saveStatus = "saved",
+  onSave,
+  lastSavedAt,
+  onRenameWorkspace,
 }: WorkspaceToolbarProps) {
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState(workspaceName);
+
+  const handleOpenRename = () => {
+    setRenameValue(workspaceName);
+    setIsRenameOpen(true);
+  };
+
+  const handleSaveRename = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (renameValue.trim() && onRenameWorkspace) {
+      onRenameWorkspace(renameValue.trim());
+    }
+    setIsRenameOpen(false);
+  };
+
   return (
     <header className={styles.toolbar}>
-      {/* Left: Navigation and Workspace Name */}
+      {/* Left: Navigation, Workspace Name, Rename, Save Status */}
       <div className={styles.left}>
         <button
           type="button"
@@ -78,7 +108,61 @@ export function WorkspaceToolbar({
         <span className={styles.workspaceName} title={workspaceName}>
           {workspaceName}
         </span>
+
+        {onRenameWorkspace && (
+          <button
+            type="button"
+            className={styles.renameButton}
+            onClick={handleOpenRename}
+            title="Rename workspace"
+            aria-label="Rename workspace"
+          >
+            <Edit2 size={12} />
+          </button>
+        )}
+
+        {/* Phase 7B: Save Status Indicator */}
+        <div className={styles.saveIndicatorWrapper}>
+          {saveStatus === "saving" && (
+            <div className={styles.saveStatusSaving} title="Saving changes to persistent database...">
+              <Loader2 size={11} className={styles.spin} />
+              <span>Saving...</span>
+            </div>
+          )}
+          {saveStatus === "saved" && (
+            <div
+              className={styles.saveStatusSaved}
+              title={lastSavedAt ? `Saved to database at ${lastSavedAt}` : "All changes saved to database"}
+            >
+              <Check size={11} />
+              <span>Saved</span>
+            </div>
+          )}
+          {saveStatus === "unsaved" && (
+            <button
+              type="button"
+              className={styles.saveStatusUnsaved}
+              onClick={onSave}
+              title="Unsaved changes. Click to save now (or press Ctrl+S)"
+            >
+              <CloudUpload size={11} />
+              <span>Save</span>
+            </button>
+          )}
+          {saveStatus === "error" && (
+            <button
+              type="button"
+              className={styles.saveStatusError}
+              onClick={onSave}
+              title="Save failed. Click to retry."
+            >
+              <AlertCircle size={11} />
+              <span>Save Failed (Retry)</span>
+            </button>
+          )}
+        </div>
       </div>
+
 
       {/* Center: Language Selector */}
       <div className={styles.center}>
@@ -173,6 +257,35 @@ export function WorkspaceToolbar({
           {isRunning ? "Running..." : "Run"}
         </Button>
       </div>
+
+      {/* Rename Project Modal */}
+      {isRenameOpen && (
+        <Modal
+          isOpen={isRenameOpen}
+          onClose={() => setIsRenameOpen(false)}
+          title="Rename Project"
+        >
+          <form onSubmit={handleSaveRename} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <Input
+              label="Project Name"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="e.g. My Algorithm Lab"
+              autoFocus
+              maxLength={100}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <Button type="button" variant="secondary" onClick={() => setIsRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={!renameValue.trim()}>
+                Save Name
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </header>
   );
 }
+
