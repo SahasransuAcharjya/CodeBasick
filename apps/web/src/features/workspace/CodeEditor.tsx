@@ -13,6 +13,7 @@ export interface CodeEditorProps {
   fontSize?: number;
   tabSize?: number;
   wordWrap?: boolean;
+  onEditorMount?: (editorInstance: editor.IStandaloneCodeEditor) => void;
 }
 
 export function CodeEditor({
@@ -21,6 +22,7 @@ export function CodeEditor({
   fontSize = 14,
   tabSize = 4,
   wordWrap = true,
+  onEditorMount,
 }: CodeEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
@@ -57,9 +59,12 @@ export function CodeEditor({
   const handleOnMount: OnMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor) => {
       editorRef.current = editorInstance;
+      if (onEditorMount) {
+        onEditorMount(editorInstance);
+      }
       editorInstance.focus();
     },
-    []
+    [onEditorMount]
   );
 
   const monacoLang = getMonacoLanguage(file.language);

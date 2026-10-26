@@ -411,16 +411,20 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  margin-top: 0.15rem;
+  margin-top: 0.35rem;
 }
 
 .conceptTag {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.6875rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-xs);
   background-color: var(--surface-2);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
+  letter-spacing: 0.02em;
 }
 
 .caveatCallout {
@@ -476,4 +480,266 @@
 .aiRetryButton:hover {
   background-color: rgba(239, 68, 68, 0.2);
 }
+
+/* PHASE 7A: AI Error Doctor & Diagnostics Styles */
+
+.sectionHeader {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.stepTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.originalErrorContainer {
+  margin-bottom: 1rem;
+}
+
+.originalErrorBox {
+  background-color: var(--bg-canvas);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #fca5a5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.doctorTriggerCard {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.doctorTriggerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.doctorTriggerTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.doctorTriggerDesc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.doctorDiagnoseButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #059669;
+  border: 1px solid #10b981;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.doctorDiagnoseButton:hover:not(:disabled) {
+  background-color: #10b981;
+}
+
+.doctorDiagnoseButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.doctorCard {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.doctorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.65rem;
+}
+
+.doctorBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.doctorBadgeType {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f87171;
+  background-color: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-xs);
+}
+
+.doctorBadgeConfidence {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #34d399;
+  background-color: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-xs);
+  text-transform: capitalize;
+}
+
+.doctorBadgeLine {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--surface-3);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-xs);
+}
+
+.doctorSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.doctorSectionHeading {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.doctorSectionText {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.doctorChangesList {
+  margin: 0.25rem 0 0 1rem;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.doctorChangesList li {
+  margin-bottom: 0.2rem;
+}
+
+.staleWarningBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #fde047;
+}
+
+.appliedSuccessBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6ee7b7;
+}
+
+.doctorActionRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.applyFixButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #047857;
+  border: 1px solid #10b981;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.applyFixButton:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.applyFixButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryDoctorButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.secondaryDoctorButton:hover {
+  background-color: var(--surface-3);
+  color: var(--text-primary);
+}
+
 

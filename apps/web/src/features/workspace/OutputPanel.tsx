@@ -17,6 +17,9 @@ import {
   Minimize2,
   RotateCcw,
   Info,
+  CheckCircle2,
+  Stethoscope,
+  RefreshCw,
 } from "lucide-react";
 import {
   OutputMessage,
@@ -24,7 +27,9 @@ import {
   ExecutionStatusState,
   PseudocodeApiResponse,
   ExplainApiResponse,
+  DiagnoseErrorApiResponse,
 } from "./workspace.types";
+import { CodeDiffViewer } from "./CodeDiffViewer";
 import styles from "./OutputPanel.module.css";
 
 export type OutputPanelTab =
@@ -34,6 +39,14 @@ export type OutputPanelTab =
   | "explanation"
   | "diagnostics"
   | "status";
+
+export interface LastExecutionErrorContext {
+  rawStderr: string;
+  code: string;
+  language: string;
+  filename: string;
+  primaryLine?: number;
+}
 
 export interface OutputPanelProps {
   logs: OutputMessage[];
@@ -55,6 +68,18 @@ export interface OutputPanelProps {
   isGeneratingExplanation?: boolean;
   explainError?: string | null;
   onRetryExplain?: () => void;
+
+  // Phase 7A: AI Error Doctor & One-Click Fix
+  lastExecutionError?: LastExecutionErrorContext | null;
+  diagnosisData?: DiagnoseErrorApiResponse | null;
+  isDiagnosing?: boolean;
+  diagnoseError?: string | null;
+  diagnosedCode?: string | null;
+  isFixApplied?: boolean;
+  activeFileContent?: string;
+  onDiagnoseError?: () => void;
+  onApplyFix?: () => void;
+  onRetryDiagnosis?: () => void;
 }
 
 export function OutputPanel({
@@ -76,12 +101,24 @@ export function OutputPanel({
   isGeneratingExplanation = false,
   explainError,
   onRetryExplain,
+  // Phase 7A
+  lastExecutionError,
+  diagnosisData,
+  isDiagnosing = false,
+  diagnoseError,
+  diagnosedCode,
+  isFixApplied = false,
+  activeFileContent = "",
+  onDiagnoseError,
+  onApplyFix,
+  onRetryDiagnosis,
 }: OutputPanelProps) {
   const [internalTab, setInternalTab] = useState<OutputPanelTab>("output");
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasCopiedPseudocode, setHasCopiedPseudocode] = useState(false);
 
   const activeTab = externalTab ?? internalTab;
+
 
   const handleTabClick = (tab: OutputPanelTab) => {
     if (onTabChange) {
@@ -380,23 +417,23 @@ export function OutputPanel({
                   {/* Main Grid: Pseudocode Text + Step Breakdown */}
                   <div className={styles.pseudocodeGrid}>
                     <div>
-                      <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.35rem" }}>
+                      <div className={styles.sectionHeader}>
                         FORMATTED PSEUDOCODE
                       </div>
-                      <div className={styles.pseudocodeBox}>
-                        {pseudocodeData.pseudocode}
-                      </div>
+                      <pre className={styles.pseudocodeBox}>
+                        <code>{pseudocodeData.pseudocode.replace(/\\n/g, "\n")}</code>
+                      </pre>
                     </div>
 
                     <div>
-                      <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.35rem" }}>
+                      <div className={styles.sectionHeader}>
                         LOGICAL STEPS ({pseudocodeData.steps.length})
                       </div>
                       <div className={styles.stepsContainer}>
                         {pseudocodeData.steps.map((step) => (
                           <div key={step.step_number} className={styles.stepCard}>
                             <div className={styles.stepCardHeader}>
-                              <div>
+                              <div className={styles.stepTitleGroup}>
                                 <span className={styles.stepNumber}>Step {step.step_number}</span>
                                 <span className={styles.stepLabel}>{step.label}</span>
                               </div>
@@ -494,11 +531,13 @@ export function OutputPanel({
                         <div className={styles.lineBadge}>L{item.line_number}</div>
                         <div className={styles.explainBody}>
                           {item.code && (
-                            <div className={styles.codeSnippet}>{item.code}</div>
+                            <pre className={styles.codeSnippet}>
+                              <code>{item.code.replace(/\\n/g, "\n")}</code>
+                            </pre>
                           )}
                           <p className={styles.explainText}>{item.explanation}</p>
                           {item.concepts && item.concepts.length > 0 && (
-                            <div className={styles.conceptsList}>
+                            <div className={styles.conceptsList} aria-label="Key concepts">
                               {item.concepts.map((concept, idx) => (
                                 <span key={idx} className={styles.conceptTag}>
                                   {concept}
@@ -527,24 +566,264 @@ export function OutputPanel({
             </div>
           )}
 
-          {/* TAB 5: DIAGNOSTICS */}
+          {/* TAB 5: DIAGNOSTICS (PHASE 7A: AI ERROR DOCTOR) */}
           {activeTab === "diagnostics" && (
             <div>
-              {diagnostics.length === 0 ? (
-                <p className={styles.emptyState}>
-                  No compiler warnings or diagnostics reported.
-                </p>
-              ) : (
-                diagnostics.map((diag) => (
-                  <div key={diag.id} className={styles.logEntry}>
-                    <span className={styles[`msg_${diag.severity}`]}>
-                      [{diag.severity.toUpperCase()}] Line {diag.line}: {diag.message}
-                    </span>
+              {/* Special Status: Timeout */}
+              {status.state === "timeout" && (
+                <div className={styles.aiIncompleteBanner} style={{ marginBottom: "1rem" }}>
+                  <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                  <div>
+                    <strong>Execution Timed Out (Resource / Time Limit Exceeded)</strong>
+                    <p style={{ marginTop: "0.25rem", color: "var(--text-secondary)" }}>
+                      The program exceeded the execution time limit. This commonly indicates an infinite loop (e.g. while loop without termination condition) or heavy CPU workload. Automatic code fix is not available for timeouts.
+                    </p>
                   </div>
-                ))
+                </div>
+              )}
+
+              {/* Special Status: Unconfigured Key */}
+              {status.state === "unconfigured" && (
+                <div className={styles.aiError} style={{ marginBottom: "1rem" }}>
+                  <AlertTriangle size={16} />
+                  <div>
+                    <strong>OneCompiler API Key Not Configured</strong>
+                    <p style={{ marginTop: "0.25rem" }}>
+                      Remote execution requires a valid OneCompiler API key. Please configure <code>ONECOMPILER_API_KEY</code> in <code>apps/api/.env</code>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Special Status: Provider Network Error */}
+              {status.state === "error" && (
+                <div className={styles.aiError} style={{ marginBottom: "1rem" }}>
+                  <AlertTriangle size={16} />
+                  <div>
+                    <strong>Execution Provider Connection Error</strong>
+                    <p style={{ marginTop: "0.25rem" }}>
+                      Could not reach the execution backend. Please verify that the FastAPI backend server is running on port 8000.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Actionable Error: Compiler or Runtime Error Present */}
+              {(status.state === "failed" || Boolean(lastExecutionError?.rawStderr) || diagnostics.some(d => d.severity === "error")) ? (
+                <>
+                  {/* Section 1: Original Compiler or Runtime Error Output */}
+                  <div className={styles.originalErrorContainer}>
+                    <div className={styles.sectionHeader}>
+                      ACTUAL COMPILER / RUNTIME ERROR OUTPUT
+                    </div>
+                    <pre className={styles.originalErrorBox}>
+                      <code>
+                        {lastExecutionError?.rawStderr ||
+                          diagnostics.map((d) => `[${d.severity.toUpperCase()}] Line ${d.line || "?"}: ${d.message}`).join("\n")}
+                      </code>
+                    </pre>
+                  </div>
+
+                  {/* Section 2: Structured Diagnostics (if parsed) */}
+                  {diagnostics.length > 0 && (
+                    <div style={{ marginBottom: "1rem" }}>
+                      <div className={styles.sectionHeader}>
+                        STRUCTURED DIAGNOSTICS ({diagnostics.length})
+                      </div>
+                      {diagnostics.map((diag) => (
+                        <div key={diag.id} className={styles.logEntry}>
+                          <span className={styles[`msg_${diag.severity}`]}>
+                            [{diag.severity.toUpperCase()}] {diag.line ? `Line ${diag.line}: ` : ""}{diag.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Section 3: AI Error Doctor Diagnose Action or Diagnosis State */}
+                  {!diagnosisData && !isDiagnosing && (
+                    <div className={styles.doctorTriggerCard}>
+                      <div className={styles.doctorTriggerInfo}>
+                        <div className={styles.doctorTriggerTitle}>
+                          <Stethoscope size={16} color="var(--accent-text)" />
+                          <span>AI Error Doctor</span>
+                        </div>
+                        <span className={styles.doctorTriggerDesc}>
+                          Receive a beginner-friendly diagnosis, explanation, and one-click code fix.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.doctorDiagnoseButton}
+                        onClick={onDiagnoseError}
+                      >
+                        <Sparkles size={14} />
+                        <span>Diagnose with AI</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Diagnosing Loading State */}
+                  {isDiagnosing && (
+                    <div className={styles.aiLoading}>
+                      <Sparkles size={24} color="var(--accent-text)" />
+                      <div>
+                        <strong style={{ color: "var(--text-primary)" }}>
+                          AI Error Doctor is Analyzing Your Code...
+                        </strong>
+                        <p style={{ marginTop: "0.25rem", color: "var(--text-muted)" }}>
+                          Gemini AI is examining the compiler error, syntax rules, and intended logic.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Diagnosis Failure State */}
+                  {diagnoseError && (
+                    <div className={styles.aiError} style={{ marginTop: "0.75rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <AlertTriangle size={16} />
+                        <strong>AI Diagnosis Request Failed</strong>
+                      </div>
+                      <p style={{ fontSize: "0.8125rem", lineHeight: 1.4 }}>{diagnoseError}</p>
+                      {onRetryDiagnosis && (
+                        <button
+                          type="button"
+                          className={styles.aiRetryButton}
+                          onClick={onRetryDiagnosis}
+                        >
+                          <RotateCcw size={12} />
+                          Retry Diagnosis
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Diagnosis Result Card */}
+                  {diagnosisData && (
+                    <div className={styles.doctorCard}>
+                      {/* Doctor Header */}
+                      <div className={styles.doctorHeader}>
+                        <div className={styles.doctorBadges}>
+                          <span className={styles.doctorBadgeType}>
+                            {diagnosisData.error_type}
+                          </span>
+                          {diagnosisData.affected_lines?.length > 0 && (
+                            <span className={styles.doctorBadgeLine}>
+                              Line {diagnosisData.affected_lines.join(", ")}
+                            </span>
+                          )}
+                          <span className={styles.doctorBadgeConfidence}>
+                            {diagnosisData.confidence} Confidence
+                          </span>
+                        </div>
+                        {onRetryDiagnosis && (
+                          <button
+                            type="button"
+                            className={styles.secondaryDoctorButton}
+                            onClick={onRetryDiagnosis}
+                            title="Regenerate diagnosis"
+                          >
+                            <RefreshCw size={12} />
+                            <span>Re-diagnose</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Summary Section */}
+                      <div className={styles.doctorSection}>
+                        <span className={styles.doctorSectionHeading}>What Went Wrong</span>
+                        <p className={styles.doctorSectionText}>{diagnosisData.summary}</p>
+                      </div>
+
+                      {/* Why it Happened */}
+                      <div className={styles.doctorSection}>
+                        <span className={styles.doctorSectionHeading}>Why It Happened</span>
+                        <p className={styles.doctorSectionText}>{diagnosisData.why_it_happened}</p>
+                      </div>
+
+                      {/* Suggested Fix */}
+                      <div className={styles.doctorSection}>
+                        <span className={styles.doctorSectionHeading}>Suggested Correction</span>
+                        <p className={styles.doctorSectionText}>{diagnosisData.suggested_fix}</p>
+                      </div>
+
+                      {/* Changes Summary List */}
+                      {diagnosisData.changes_summary?.length > 0 && (
+                        <div className={styles.doctorSection}>
+                          <span className={styles.doctorSectionHeading}>Summary of Changes</span>
+                          <ul className={styles.doctorChangesList}>
+                            {diagnosisData.changes_summary.map((change, idx) => (
+                              <li key={idx}>{change}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* AI Disclaimer */}
+                      <div className={styles.aiDisclaimerBanner}>
+                        <Info size={14} style={{ flexShrink: 0 }} />
+                        <span>{diagnosisData.disclaimer}</span>
+                      </div>
+
+                      {/* Proposed Code Changes Diff */}
+                      {diagnosisData.can_auto_fix && diagnosisData.corrected_code && (
+                        <>
+                          <CodeDiffViewer
+                            originalCode={diagnosedCode || activeFileContent}
+                            correctedCode={diagnosisData.corrected_code}
+                          />
+
+                          {/* Stale-Fix Protection Notice */}
+                          {Boolean(diagnosedCode && activeFileContent !== diagnosedCode) && (
+                            <div className={styles.staleWarningBanner}>
+                              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                              <span>
+                                The editor buffer has been modified since this diagnosis was generated. Review your edits or click &quot;Re-diagnose&quot; before applying.
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Action Controls */}
+                          {isFixApplied ? (
+                            <div className={styles.appliedSuccessBanner}>
+                              <CheckCircle2 size={16} />
+                              <span>
+                                Correction successfully applied to editor buffer! Press Ctrl+Z in the editor to undo at any time.
+                              </span>
+                            </div>
+                          ) : (
+                            <div className={styles.doctorActionRow}>
+                              <button
+                                type="button"
+                                className={styles.applyFixButton}
+                                onClick={onApplyFix}
+                                disabled={Boolean(diagnosedCode && activeFileContent !== diagnosedCode)}
+                                title={
+                                  Boolean(diagnosedCode && activeFileContent !== diagnosedCode)
+                                    ? "Re-diagnose required: editor buffer has changed"
+                                    : "Apply suggested correction to active file buffer"
+                                }
+                              >
+                                <Check size={14} />
+                                <span>Apply Fix to Editor</span>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Empty state when no error or successful run */
+                <p className={styles.emptyState}>
+                  No compiler warnings or execution errors reported. Click &quot;Run&quot; above to execute code. If an error occurs, CodeBasick AI Error Doctor will provide a step-by-step diagnosis and one-click fix.
+                </p>
               )}
             </div>
           )}
+
 
           {/* TAB 6: STATUS */}
           {activeTab === "status" && (

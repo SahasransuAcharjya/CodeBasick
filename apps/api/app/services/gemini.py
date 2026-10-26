@@ -11,6 +11,8 @@ from fastapi import Depends
 from app.core.config import Settings, get_settings
 from app.core.exceptions import AIServiceException
 from app.schemas.ai import (
+    DiagnoseErrorRequest,
+    DiagnoseErrorResponse,
     ExplainRequest,
     ExplainResponse,
     LineExplanationItem,
@@ -353,16 +355,28 @@ class GeminiService:
                 if not code_text and 1 <= line_no <= len(original_lines):
                     code_text = original_lines[line_no - 1]
 
-                concepts = item.get("concepts", [])
-                if not isinstance(concepts, list):
-                    concepts = [str(concepts)] if concepts else []
+                raw_concepts = item.get("concepts", [])
+                normalized_concepts: List[str] = []
+                if isinstance(raw_concepts, str):
+                    normalized_concepts = [c.strip() for c in raw_concepts.split(",") if c.strip()]
+                elif isinstance(raw_concepts, list):
+                    for c in raw_concepts:
+                        if isinstance(c, str):
+                            for sub in c.split(","):
+                                clean = sub.strip()
+                                if clean and clean not in normalized_concepts:
+                                    normalized_concepts.append(clean)
+                        elif c:
+                            clean = str(c).strip()
+                            if clean and clean not in normalized_concepts:
+                                normalized_concepts.append(clean)
 
                 validated_items.append(
                     LineExplanationItem(
                         line_number=line_no,
                         code=str(code_text or ""),
                         explanation=str(item.get("explanation", "")),
-                        concepts=[str(c) for c in concepts],
+                        concepts=normalized_concepts,
                         caveats=item.get("caveats"),
                     )
                 )
@@ -380,6 +394,108 @@ class GeminiService:
                 "Always verify against compiler diagnostics."
             ),
             is_incomplete=bool(result_dict.get("is_incomplete", False)),
+            model=result_dict.get("_model", self.settings.GEMINI_MODEL),
+        )
+
+    async def generate_diagnosis(self, request: DiagnoseErrorRequest) -> DiagnoseErrorResponse:
+        """Diagnose a compiler error or runtime exception and provide structured correction."""
+        original_lines = request.code.splitlines()
+        numbered_code_lines = [f"{i + 1}: {line}" for i, line in enumerate(original_lines)]
+        numbered_code = "\n".join(numbered_code_lines)
+
+        diag_context = ""
+        if request.diagnostics:
+            diag_lines = [
+                f"- Line {d.line or '?'}, Col {d.column or '?'}: [{d.severity.upper()}] {d.message}"
+                for d in request.diagnostics
+            ]
+            diag_context = "\nSTRUCTURED COMPILER DIAGNOSTICS:\n" + "\n".join(diag_lines)
+
+        stdin_context = ""
+        if request.stdin:
+            stdin_context = f"\nPROGRAM STDIN CONTEXT:\n{request.stdin}\n"
+
+        line_hint = f"\nReported Error Line Number: {request.line_number}" if request.line_number else ""
+
+        prompt = (
+            f"You are CodeBasick AI Error Doctor, an expert programming tutor helping beginners.\n"
+            f"A student's {request.language.upper()} code resulted in a compilation or runtime failure.\n\n"
+            f"Your task is to analyze the source code and the actual error output, explain the issue in beginner-friendly terms, "
+            f"and provide the smallest, targeted correction that resolves the error while preserving the student's original logic.\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Base your diagnosis strictly on the actual source code and the actual error output.\n"
+            f"2. Explain in plain, accessible language WHY the error happened and what programming concept it relates to.\n"
+            f"3. In 'suggested_fix', concisely describe what needs to be changed.\n"
+            f"4. In 'corrected_code', return the COMPLETE corrected source file. Apply the smallest reasonable fix. "
+            f"Do NOT refactor unrelated code, rename working variables, add unnecessary libraries, or alter the student's intended logic.\n"
+            f"5. In 'changes_summary', provide a brief list of the specific changes made.\n"
+            f"6. In 'affected_lines', provide the 1-indexed line numbers in the original code that were modified or caused the issue.\n"
+            f"7. In 'confidence', indicate your certainty based on available evidence ('high', 'medium', or 'low'). "
+            f"If information is missing, state assumptions in 'caveats'.\n"
+            f"8. Never claim that the corrected code has already been executed or compiled.\n\n"
+            f"JSON Output Format (Strictly produce JSON conforming to this schema):\n"
+            f"{{\n"
+            f'  "error_type": "Specific Classification (e.g. Syntax Error, Undefined Variable, Type Mismatch, Missing Semicolon, ZeroDivisionError)",\n'
+            f'  "summary": "1-2 sentence beginner-friendly explanation of what went wrong",\n'
+            f'  "why_it_happened": "Detailed explanation of why the compiler or runtime threw this error and the underlying rule/concept",\n'
+            f'  "suggested_fix": "Clear explanation of how to fix it",\n'
+            f'  "corrected_code": "Complete corrected source code string",\n'
+            f'  "changes_summary": ["Added missing semicolon at end of line 7"],\n'
+            f'  "affected_lines": [7],\n'
+            f'  "confidence": "high",\n'
+            f'  "caveats": null\n'
+            f"}}\n\n"
+            f"RAW UNTRUSTED NUMBERED SOURCE CODE ({request.language}):\n"
+            f"{numbered_code}\n\n"
+            f"ACTUAL COMPILER / RUNTIME ERROR OUTPUT:\n"
+            f"```\n{request.error_message}\n```{line_hint}{diag_context}{stdin_context}"
+        )
+
+        result_dict = await self._call_gemini_api(prompt)
+
+        raw_corrected = result_dict.get("corrected_code")
+        can_auto_fix = bool(raw_corrected and isinstance(raw_corrected, str) and raw_corrected.strip())
+        corrected_code = str(raw_corrected).strip() if can_auto_fix else None
+
+        changes = result_dict.get("changes_summary", [])
+        if isinstance(changes, str):
+            changes = [changes]
+        elif not isinstance(changes, list):
+            changes = []
+        clean_changes = [str(c).strip() for c in changes if str(c).strip()]
+
+        raw_lines = result_dict.get("affected_lines", [])
+        clean_lines: List[int] = []
+        if isinstance(raw_lines, (int, str)):
+            raw_lines = [raw_lines]
+        if isinstance(raw_lines, list):
+            for item in raw_lines:
+                try:
+                    clean_lines.append(int(item))
+                except (ValueError, TypeError):
+                    continue
+
+        if not clean_lines and request.line_number:
+            clean_lines = [request.line_number]
+
+        confidence_val = str(result_dict.get("confidence", "high")).lower()
+        if confidence_val not in ("high", "medium", "low"):
+            confidence_val = "high"
+
+        return DiagnoseErrorResponse(
+            language=request.language,
+            error_type=str(result_dict.get("error_type", "Compiler / Runtime Error")),
+            summary=str(result_dict.get("summary", "An error was identified in your code.")),
+            why_it_happened=str(
+                result_dict.get("why_it_happened", "The compiler or runtime encountered unexpected syntax or state.")
+            ),
+            suggested_fix=str(result_dict.get("suggested_fix", "Apply the suggested correction.")),
+            corrected_code=corrected_code,
+            changes_summary=clean_changes or (["Applied correction to resolve the error."] if can_auto_fix else []),
+            affected_lines=clean_lines,
+            confidence=confidence_val,  # type: ignore[arg-type]
+            can_auto_fix=can_auto_fix,
+            caveats=result_dict.get("caveats"),
             model=result_dict.get("_model", self.settings.GEMINI_MODEL),
         )
 

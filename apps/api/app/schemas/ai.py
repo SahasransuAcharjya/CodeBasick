@@ -116,3 +116,120 @@ class ExplainResponse(BaseModel):
     )
     is_incomplete: bool = Field(False, description="True if the submitted code was partial or contains syntax errors.")
     model: str = Field(..., description="Gemini model identifier used for generation.")
+
+
+class DiagnosticItemInput(BaseModel):
+    """Structured diagnostic item passed from compiler or linter output."""
+
+    line: Optional[int] = Field(None, description="1-indexed line number if identified")
+    column: Optional[int] = Field(None, description="Column number if identified")
+    severity: Literal["error", "warning", "info"] = Field("error", description="Severity level")
+    message: str = Field(..., description="Compiler or linter diagnostic message")
+    source: Optional[str] = Field(None, description="Source filename or compiler tool")
+
+
+class DiagnoseErrorRequest(BaseModel):
+    """Request payload for diagnosing compiler errors and runtime exceptions."""
+
+    language: Literal["c", "python"] = Field(
+        ...,
+        description="Programming language of the source code ('c' or 'python').",
+    )
+    code: str = Field(
+        ...,
+        description="Source code containing the error (max 64 KB).",
+    )
+    error_message: Optional[str] = Field(
+        None,
+        description="Raw compiler stderr, traceback, or runtime exception output (max 32 KB).",
+    )
+    error_output: Optional[str] = Field(
+        None,
+        description="Alternative field name for error_message.",
+    )
+    filename: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Optional source filename (e.g. 'main.c' or 'main.py').",
+    )
+    line_number: Optional[int] = Field(
+        None,
+        description="Primary line number identified in compiler or runtime error, if known.",
+    )
+    diagnostics: Optional[List[DiagnosticItemInput]] = Field(
+        default=None,
+        description="Optional structured compiler diagnostics parsed by frontend.",
+    )
+    stdin: Optional[str] = Field(
+        None,
+        description="Optional standard input provided to the program during execution.",
+    )
+
+    @model_validator(mode="after")
+    def validate_diagnose_payload(self) -> "DiagnoseErrorRequest":
+        """Validate non-empty code and error message, and enforce payload size limits."""
+        if not self.code or not self.code.strip():
+            raise ValueError("Source code must not be empty or purely whitespace.")
+
+        effective_error = self.error_message or self.error_output
+        if not effective_error or not effective_error.strip():
+            raise ValueError("Error message / compiler output must not be empty.")
+        self.error_message = effective_error
+
+        code_bytes = len(self.code.encode("utf-8"))
+        if code_bytes > 65536:
+            raise ValueError(
+                f"Source code payload size ({code_bytes} bytes) exceeds maximum limit of 65536 bytes (64 KB)."
+            )
+
+        err_bytes = len(self.error_message.encode("utf-8"))
+        if err_bytes > 32768:
+            raise ValueError(
+                f"Error message payload size ({err_bytes} bytes) exceeds maximum limit of 32768 bytes (32 KB)."
+            )
+
+        if self.stdin is not None and len(self.stdin.encode("utf-8")) > 16384:
+            raise ValueError("Standard input context exceeds maximum limit of 16384 bytes (16 KB).")
+
+        return self
+
+
+class DiagnoseErrorResponse(BaseModel):
+    """Structured response from Gemini AI Error Doctor."""
+
+    language: str = Field(..., description="Programming language analyzed.")
+    error_type: str = Field(
+        ...,
+        description="Classification (e.g. 'Syntax Error', 'Compilation Error', 'Runtime Exception', 'Type Mismatch').",
+    )
+    summary: str = Field(..., description="Beginner-friendly explanation of the error in plain English.")
+    why_it_happened: str = Field(..., description="Clear explanation of the underlying cause and programming concept.")
+    suggested_fix: str = Field(..., description="Concise explanation of the necessary correction.")
+    corrected_code: Optional[str] = Field(
+        None,
+        description="Complete corrected source code ready to be applied to editor, or None if no safe auto-fix is available.",
+    )
+    changes_summary: List[str] = Field(
+        default_factory=list,
+        description="Bulleted list of discrete changes made in the corrected code.",
+    )
+    affected_lines: List[int] = Field(
+        default_factory=list,
+        description="1-indexed line numbers modified or affected by the correction.",
+    )
+    confidence: Literal["high", "medium", "low"] = Field(
+        "high",
+        description="Model confidence indicator based on evidence sufficiency.",
+    )
+    can_auto_fix: bool = Field(
+        True,
+        description="Whether a concrete automated code correction is safely available to apply.",
+    )
+    disclaimer: str = Field(
+        default="AI-generated suggestions are educational guides and have not been executed. Always review before applying.",
+        description="Safety and educational disclaimer.",
+    )
+    caveats: Optional[str] = Field(None, description="Any assumptions made or remaining considerations for the student.")
+    model: str = Field(..., description="Gemini model identifier used for diagnosis.")
+
+

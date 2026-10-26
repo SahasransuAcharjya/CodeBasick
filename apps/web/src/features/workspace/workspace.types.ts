@@ -111,4 +111,36 @@ export interface ExplainApiResponse {
   model: string;
 }
 
+export interface DiagnosticItemInput {
+  line?: number | null;
+  column?: number | null;
+  message: string;
+  severity: string;
+}
+
+export interface DiagnoseErrorApiResponse {
+  language: string;
+  error_type: string;
+  summary: string;
+  why_it_happened: string;
+  suggested_fix: string;
+  corrected_code: string | null;
+  changes_summary: string[];
+  affected_lines: number[];
+  confidence: "high" | "medium" | "low";
+  can_auto_fix: boolean;
+  disclaimer: string;
+  caveats?: string | null;
+  model: string;
+}
+
+export interface DiagnosisState {
+  data: DiagnoseErrorApiResponse | null;
+  loading: boolean;
+  error: string | null;
+  diagnosedCode: string | null;
+  diagnosedFileId: string | null;
+}
+
+
 

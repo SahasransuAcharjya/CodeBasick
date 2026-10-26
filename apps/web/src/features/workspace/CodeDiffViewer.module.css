@@ -1,0 +1,110 @@
+.diffContainer {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-1);
+  overflow: hidden;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+}
+
+.diffHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.75rem;
+  background-color: var(--surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.diffTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diffStats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.statAdd {
+  color: #34d399;
+}
+
+.statDel {
+  color: #f87171;
+}
+
+.diffContent {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-color: var(--bg-canvas);
+}
+
+.diffTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.lineNo {
+  width: 34px;
+  padding: 0.15rem 0.4rem;
+  text-align: right;
+  color: var(--text-muted);
+  user-select: none;
+  border-right: 1px solid var(--border-subtle);
+  font-size: 0.6875rem;
+  vertical-align: top;
+}
+
+.marker {
+  width: 20px;
+  padding: 0.15rem 0.25rem;
+  text-align: center;
+  user-select: none;
+  font-weight: bold;
+  vertical-align: top;
+}
+
+.codeCell {
+  padding: 0.15rem 0.5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.codeCell code {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.rowUnchanged {
+  color: var(--text-secondary);
+}
+
+.rowAdded {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+}
+
+.rowAdded .marker {
+  color: #34d399;
+}
+
+.rowRemoved {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.rowRemoved .marker {
+  color: #ef4444;
+}

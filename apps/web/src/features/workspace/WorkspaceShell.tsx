@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { editor } from "monaco-editor";
 import { Workspace, WorkspaceFile } from "@/types";
 import {
   ProgrammingLanguage,
@@ -10,6 +11,7 @@ import {
   ExecuteApiResponse,
   PseudocodeApiResponse,
   ExplainApiResponse,
+  DiagnoseErrorApiResponse,
 } from "./workspace.types";
 import {
   getStarterFileForLanguage,
@@ -20,7 +22,7 @@ import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { FileExplorer } from "./FileExplorer";
 import { EditorTabs } from "./EditorTabs";
 import { CodeEditor } from "./CodeEditor";
-import { OutputPanel, OutputPanelTab } from "./OutputPanel";
+import { OutputPanel, OutputPanelTab, LastExecutionErrorContext } from "./OutputPanel";
 import styles from "./WorkspaceShell.module.css";
 
 export interface WorkspaceShellProps {
@@ -62,6 +64,16 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   const [explainData, setExplainData] = useState<ExplainApiResponse | null>(null);
   const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
+
+  // AI Error Doctor & One-Click Fix States (Phase 7A)
+  const editorInstanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const [lastExecutionError, setLastExecutionError] = useState<LastExecutionErrorContext | null>(null);
+  const [diagnosisData, setDiagnosisData] = useState<DiagnoseErrorApiResponse | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnoseError, setDiagnoseError] = useState<string | null>(null);
+  const [diagnosedCode, setDiagnosedCode] = useState<string | null>(null);
+  const [diagnosedFileId, setDiagnosedFileId] = useState<string | null>(null);
+  const [isFixApplied, setIsFixApplied] = useState(false);
 
   // Preferences
   const [fontSize, setFontSize] = useState(14);
@@ -321,8 +333,12 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     setIsRunning(true);
     setActiveOutputTab("output");
     setIsOutputCollapsed(false);
-    // Clear stale diagnostics from previous executions
+    // Clear stale diagnostics and AI doctor state from previous executions
     setDiagnostics([]);
+    setDiagnosisData(null);
+    setDiagnoseError(null);
+    setLastExecutionError(null);
+    setIsFixApplied(false);
 
     setStatus({
       target: activeFile.language === "c" ? "C (GCC C11)" : "Python 3.13",
@@ -494,17 +510,31 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
         // Parse compilation diagnostics if available
         const newDiags: DiagnosticItem[] = [];
         for (const line of stderrLines) {
-          const match = line.match(/^([^:]+):(\d+):(?:\d+:)?\s*(error|warning):\s*(.*)$/i);
+          const match = line.match(/^([^:]+):(\d+):(?:\d+:)?\s*(error|warning|fatal error):\s*(.*)$/i);
           if (match) {
             newDiags.push({
               id: `diag_${Date.now()}_${newDiags.length}`,
               source: match[1],
               line: parseInt(match[2], 10),
-              severity: match[3].toLowerCase() === "error" ? "error" : "warning",
+              severity: match[3].toLowerCase().includes("error") ? "error" : "warning",
               message: match[4],
             });
           }
         }
+
+        // Also parse Python traceback line numbers if present
+        const pyLineMatch = data.stderr.match(/File "([^"]+)", line (\d+)/i);
+        const pyErrorMatch = data.stderr.match(/(?:^|\n)([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)):\s*(.*)/);
+        if (pyLineMatch && pyErrorMatch) {
+          newDiags.push({
+            id: `diag_py_${Date.now()}`,
+            source: pyLineMatch[1],
+            line: parseInt(pyLineMatch[2], 10),
+            severity: "error",
+            message: `${pyErrorMatch[1]}: ${pyErrorMatch[2]}`,
+          });
+        }
+
         if (newDiags.length > 0) {
           setDiagnostics((prev) => [...prev, ...newDiags]);
         }
@@ -521,6 +551,34 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
             timestamp: responseTime,
           },
         ]);
+      }
+
+      // Store raw error context for AI Error Doctor if execution failed
+      const rawErrorOutput = (data.stderr || data.exception || "").trim();
+      if (data.status === "failed" || rawErrorOutput) {
+        let detectedLine: number | undefined = undefined;
+        const cMatch = rawErrorOutput.match(/:(\d+):(?:\d+:)?\s*(?:fatal )?error:/i);
+        if (cMatch) {
+          detectedLine = parseInt(cMatch[1], 10);
+        } else {
+          const pyMatch = rawErrorOutput.match(/File "[^"]+", line (\d+)/i);
+          if (pyMatch) {
+            detectedLine = parseInt(pyMatch[1], 10);
+          }
+        }
+
+        setLastExecutionError({
+          rawStderr: rawErrorOutput,
+          code: activeFile.content,
+          language: activeFile.language,
+          filename: activeFile.name,
+          primaryLine: detectedLine,
+        });
+
+        // Automatically switch to Diagnostics tab on execution failure so user sees the error and AI Doctor
+        if (data.status === "failed") {
+          setActiveOutputTab("diagnostics");
+        }
       }
 
       // Provide completion summary if no stdout and no stderr
@@ -692,6 +750,128 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
     }
   }, [activeFile, isGeneratingExplanation]);
 
+  // Phase 7A: AI Error Doctor Handlers
+  const handleDiagnoseError = useCallback(async () => {
+    if (!lastExecutionError || !lastExecutionError.rawStderr) return;
+
+    setIsDiagnosing(true);
+    setDiagnoseError(null);
+    setIsFixApplied(false);
+
+    // Record code snapshot and file ID for stale-fix protection
+    setDiagnosedCode(activeFile.content);
+    setDiagnosedFileId(activeFile.id);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/ai/diagnose-error`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          language: activeFile.language,
+          code: activeFile.content,
+          filename: activeFile.name,
+          error_message: lastExecutionError.rawStderr,
+          line_number: lastExecutionError.primaryLine,
+          diagnostics: diagnostics.map((d) => ({
+            line: d.line,
+            column: d.column,
+            message: d.message,
+            severity: d.severity,
+          })),
+          stdin: stdin.trim() ? stdin : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        const message =
+          errBody?.error ||
+          errBody?.details?.[0]?.message ||
+          `AI Error Doctor diagnosis failed with HTTP ${res.status}`;
+        setDiagnoseError(message);
+        return;
+      }
+
+      const result: DiagnoseErrorApiResponse = await res.json();
+      setDiagnosisData(result);
+    } catch (err: unknown) {
+      setDiagnoseError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to AI Error Doctor. Ensure the backend server is running on port 8000."
+      );
+    } finally {
+      setIsDiagnosing(false);
+    }
+  }, [activeFile, lastExecutionError, diagnostics, stdin]);
+
+  const handleApplyFix = useCallback(() => {
+    if (!diagnosisData?.corrected_code || !diagnosedFileId) return;
+
+    // Stale-fix validation check: verify that current buffer matches diagnosed code
+    const targetFile = files.find((f) => f.id === diagnosedFileId);
+    if (!targetFile) return;
+
+    if (targetFile.content !== diagnosedCode) {
+      alert(
+        "The editor buffer has changed since this diagnosis was generated. Please review your edits or click 'Re-diagnose' before applying."
+      );
+      return;
+    }
+
+    const corrected = diagnosisData.corrected_code;
+
+    // 1. If currently active editor matches target file, execute undoable edit via Monaco
+    if (activeFileId === diagnosedFileId && editorInstanceRef.current) {
+      const editorInst = editorInstanceRef.current;
+      const model = editorInst.getModel();
+      if (model) {
+        editorInst.pushUndoStop();
+        editorInst.executeEdits("ai-doctor-one-click-fix", [
+          {
+            range: model.getFullModelRange(),
+            text: corrected,
+            forceMoveMarkers: true,
+          },
+        ]);
+        editorInst.pushUndoStop();
+        editorInst.focus();
+      }
+    }
+
+    // 2. Update React files state
+    const updatedFiles = files.map((f) =>
+      f.id === diagnosedFileId ? { ...f, content: corrected } : f
+    );
+    setFiles(updatedFiles);
+    syncWorkspace(updatedFiles, activeFileId, openFileIds, language);
+
+    // 3. Mark applied and log notice
+    setIsFixApplied(true);
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `fix_applied_${Date.now()}`,
+        type: "status",
+        text: `[AI Error Doctor] Successfully applied correction to "${targetFile.name}". Use Ctrl+Z in editor to undo at any time.`,
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ]);
+  }, [
+    diagnosisData,
+    diagnosedFileId,
+    diagnosedCode,
+    files,
+    activeFileId,
+    openFileIds,
+    language,
+    syncWorkspace,
+  ]);
+
   // Handle Reset to Starter Template
   const handleReset = useCallback(() => {
     if (
@@ -763,6 +943,9 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
               fontSize={fontSize}
               tabSize={tabSize}
               wordWrap={wordWrap}
+              onEditorMount={(inst) => {
+                editorInstanceRef.current = inst;
+              }}
             />
           </div>
 
@@ -786,6 +969,17 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
             isGeneratingExplanation={isGeneratingExplanation}
             explainError={explainError}
             onRetryExplain={handleExplainCode}
+            // Phase 7A: AI Error Doctor
+            lastExecutionError={lastExecutionError}
+            diagnosisData={diagnosisData}
+            isDiagnosing={isDiagnosing}
+            diagnoseError={diagnoseError}
+            diagnosedCode={diagnosedCode}
+            isFixApplied={isFixApplied}
+            activeFileContent={activeFile.content}
+            onDiagnoseError={handleDiagnoseError}
+            onApplyFix={handleApplyFix}
+            onRetryDiagnosis={handleDiagnoseError}
           />
         </div>
       </div>
