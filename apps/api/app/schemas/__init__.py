@@ -9,6 +9,14 @@ from app.schemas.ai import (
 from app.schemas.execution import ExecuteRequest, ExecuteResponse, SourceFile
 from app.schemas.health import ErrorResponse, HealthResponse, ReadinessResponse
 
+from app.schemas.auth import (
+    GoogleAuthRequest,
+    TokenResponse,
+    UserLoginRequest,
+    UserRegisterRequest,
+    UserResponse,
+)
+
 __all__ = [
     "HealthResponse",
     "ReadinessResponse",
@@ -22,4 +30,9 @@ __all__ = [
     "ExplainRequest",
     "ExplainResponse",
     "LineExplanationItem",
+    "UserRegisterRequest",
+    "UserLoginRequest",
+    "GoogleAuthRequest",
+    "UserResponse",
+    "TokenResponse",
 ]

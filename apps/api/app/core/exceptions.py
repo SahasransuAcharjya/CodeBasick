@@ -49,6 +49,39 @@ class ValidationException(AppException):
         )
 
 
+class UnauthorizedException(AppException):
+    """Authentication required or invalid credentials exception."""
+
+    def __init__(self, message: str = "Authentication credentials are required.", details: Optional[Any] = None) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            details=details,
+        )
+
+
+class ForbiddenException(AppException):
+    """Access forbidden exception for unauthorized resource access."""
+
+    def __init__(self, message: str = "Access to this resource is forbidden.", details: Optional[Any] = None) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_403_FORBIDDEN,
+            details=details,
+        )
+
+
+class ConflictException(AppException):
+    """Resource conflict exception (e.g. duplicate user registration)."""
+
+    def __init__(self, message: str = "Resource conflict occurred.", details: Optional[Any] = None) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_409_CONFLICT,
+            details=details,
+        )
+
+
 class ExecutionException(AppException):
     """Exception raised during external code execution operations."""
 

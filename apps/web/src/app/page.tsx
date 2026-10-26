@@ -10,6 +10,9 @@ import {
   ArrowRight,
   Sparkles,
   Cpu,
+  LogIn,
+  UploadCloud,
+  HardDrive,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -30,16 +33,22 @@ import {
   fetchProjects,
   createProject,
   deleteProject,
+  importLocalWorkspaceToCloud,
 } from "@/lib/projectApi";
+import { getWorkspaces as getLocalWorkspaces } from "@/lib/storage";
+import { useAuth } from "@/context/AuthContext";
 import { Workspace, ProgrammingLanguage } from "@/types";
 import styles from "./page.module.css";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [localWorkspaces, setLocalWorkspaces] = useState<Workspace[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Form State
   const [name, setName] = useState("");
@@ -47,20 +56,23 @@ export default function DashboardPage() {
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState("");
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const res = await fetchProjects();
       setWorkspaces(res.items);
+      if (typeof window !== "undefined") {
+        setLocalWorkspaces(getLocalWorkspaces());
+      }
     } catch (err) {
       console.error("Failed to load projects:", err);
     } finally {
       setIsLoaded(true);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData, isAuthenticated]);
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +147,66 @@ export default function DashboardPage() {
             </Button>
           </div>
         </div>
+
+        {/* Guest Mode or Local Workspace Import Notice */}
+        {!authLoading && !isAuthenticated && (
+          <div className={styles.guestBanner}>
+            <div className={styles.bannerContent}>
+              <HardDrive size={18} aria-hidden="true" style={{ color: "var(--status-warning)", flexShrink: 0 }} />
+              <div>
+                <span className={styles.bannerTitle}>Guest Mode (Local Only):</span>
+                <span>Workspaces are stored in your browser. Sign in or create an account to save them securely to the persistent cloud database.</span>
+              </div>
+            </div>
+            <div className={styles.bannerActions}>
+              <Link href="/login">
+                <Button variant="primary" size="sm" leftIcon={<LogIn size={14} />}>
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button variant="outline" size="sm">
+                  Register
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {isAuthenticated && localWorkspaces.length > 0 && (
+          <div className={styles.importBanner}>
+            <div className={styles.bannerContent}>
+              <UploadCloud size={18} aria-hidden="true" style={{ color: "var(--accent-text)", flexShrink: 0 }} />
+              <div>
+                <span className={styles.bannerTitle}>Preserve Local Workspaces:</span>
+                <span>You have {localWorkspaces.length} workspace(s) stored locally in this browser. Import them into your cloud account to sync them across devices.</span>
+              </div>
+            </div>
+            <div className={styles.bannerActions}>
+              <Button
+                variant="secondary"
+                size="sm"
+                isLoading={isImporting}
+                leftIcon={<UploadCloud size={14} />}
+                onClick={async () => {
+                  setIsImporting(true);
+                  try {
+                    for (const lws of localWorkspaces) {
+                      await importLocalWorkspaceToCloud(lws);
+                    }
+                    await loadData();
+                  } catch (err: unknown) {
+                    alert(err instanceof Error ? err.message : "Failed to import workspace.");
+                  } finally {
+                    setIsImporting(false);
+                  }
+                }}
+              >
+                Import All to Cloud
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Workspaces Section */}
         <section aria-labelledby="workspaces-heading">

@@ -2,11 +2,15 @@
 
 from fastapi import APIRouter
 from app.api.routes.ai import router as ai_router
+from app.api.routes.auth import router as auth_router
 from app.api.routes.execution import router as execution_router
 from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
 
 api_router = APIRouter()
+
+# Register authentication routes under /auth prefix
+api_router.include_router(auth_router)
 
 # Register health & readiness routes under /health prefix
 api_router.include_router(health_router)

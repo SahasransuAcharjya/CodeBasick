@@ -11,9 +11,12 @@ import {
   PanelLeftOpen,
   Menu,
   Plus,
+  LogIn,
+  LogOut,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { useAuth } from "@/context/AuthContext";
 import styles from "./AppShell.module.css";
 
 interface AppShellProps {
@@ -23,6 +26,7 @@ interface AppShellProps {
 
 function AppShellInner({ children, onNewWorkspaceClick }: AppShellProps) {
   const pathname = usePathname();
+  const { user, isAuthenticated, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -167,9 +171,38 @@ function AppShellInner({ children, onNewWorkspaceClick }: AppShellProps) {
           </div>
 
           <div className={styles.topNavRight}>
-            <Badge variant="teal" withDot>
-              Phase 3 Foundation
-            </Badge>
+            {isAuthenticated && user ? (
+              <>
+                <div className={styles.userBadge} title={`Signed in as ${user.email}`}>
+                  <div className={styles.userAvatar} aria-hidden="true">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span>{user.name}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<LogOut size={14} />}
+                  onClick={logout}
+                  title="Sign out of your account"
+                >
+                  Log Out
+                </Button>
+              </>
+            ) : (
+              <div className={styles.authButtonGroup}>
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" leftIcon={<LogIn size={14} />}>
+                    Log In
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button variant="secondary" size="sm" leftIcon={<UserPlus size={14} />}>
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
+            )}
 
             {onNewWorkspaceClick && (
               <Button

@@ -5,8 +5,9 @@ import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.api.deps import get_current_owner_id
+from app.api.deps import get_current_user
 from app.core.exceptions import NotFoundException, ValidationException
+from app.schemas.auth import UserResponse
 from app.db.mongodb import is_mongodb_available
 from app.repositories.project_repository import (
     BaseProjectRepository,
@@ -108,10 +109,11 @@ def detect_file_language(filename: str, project_language: str) -> str:
 async def create_project(
     payload: ProjectCreateRequest,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectResponse:
     """Create a new project and initialize starter files."""
+    owner_id = current_user.id
     now = utc_now_iso()
     proj_id = generate_unique_id("ws")
     storage_type = "mongodb" if is_mongodb_available() else "in_memory"
@@ -181,10 +183,11 @@ async def list_projects(
     response: Response,
     limit: int = Query(50, ge=1, le=100, description="Page limit."),
     offset: int = Query(0, ge=0, description="Offset index."),
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectListResponse:
     """List project summaries owned by the current owner."""
+    owner_id = current_user.id
     storage_type = "mongodb" if is_mongodb_available() else "in_memory"
     response.headers["X-Storage-Backend"] = storage_type
     items, total = await repo.list_projects(owner_id, limit=limit, offset=offset)
@@ -203,10 +206,11 @@ async def list_projects(
 async def get_project(
     project_id: str,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectResponse:
     """Retrieve an existing project by ID."""
+    owner_id = current_user.id
     storage_type = "mongodb" if is_mongodb_available() else "in_memory"
     response.headers["X-Storage-Backend"] = storage_type
     proj = await repo.get_project(owner_id, project_id)
@@ -226,10 +230,11 @@ async def update_project(
     project_id: str,
     payload: ProjectUpdateRequest,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectResponse:
     """Update project details or save file buffers."""
+    owner_id = current_user.id
     storage_type = "mongodb" if is_mongodb_available() else "in_memory"
     response.headers["X-Storage-Backend"] = storage_type
 
@@ -279,10 +284,11 @@ async def update_project(
 async def delete_project(
     project_id: str,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> dict:
     """Delete a project owned by the current owner."""
+    owner_id = current_user.id
     storage_type = "mongodb" if is_mongodb_available() else "in_memory"
     response.headers["X-Storage-Backend"] = storage_type
     deleted = await repo.delete_project(owner_id, project_id)
@@ -302,10 +308,11 @@ async def add_project_file(
     project_id: str,
     payload: FileCreateRequest,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectFile:
     """Create a new file inside an existing project."""
+    owner_id = current_user.id
     response.headers["X-Storage-Backend"] = "mongodb" if is_mongodb_available() else "in_memory"
     proj = await repo.get_project(owner_id, project_id)
     if not proj:
@@ -349,10 +356,11 @@ async def update_project_file(
     file_id: str,
     payload: FileUpdateRequest,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> ProjectFile:
     """Update content or name of a single file in a project."""
+    owner_id = current_user.id
     response.headers["X-Storage-Backend"] = "mongodb" if is_mongodb_available() else "in_memory"
     updates = {}
     if payload.name is not None:
@@ -379,10 +387,11 @@ async def delete_project_file(
     project_id: str,
     file_id: str,
     response: Response,
-    owner_id: str = Depends(get_current_owner_id),
+    current_user: UserResponse = Depends(get_current_user),
     repo: BaseProjectRepository = Depends(get_project_repository),
 ) -> dict:
     """Delete a file from a project."""
+    owner_id = current_user.id
     response.headers["X-Storage-Backend"] = "mongodb" if is_mongodb_available() else "in_memory"
     proj = await repo.get_project(owner_id, project_id)
     if not proj:

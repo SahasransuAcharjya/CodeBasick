@@ -52,6 +52,12 @@ async def test_live_mongodb_indexes_and_collections(live_mongo_manager: MongoMan
     assert indexes["idx_owner_project_unique"].get("unique") is True
     assert "idx_updated_at" in indexes
 
+    user_indexes = await db["users"].index_information()
+    assert "idx_user_id" in user_indexes
+    assert "idx_user_email" in user_indexes
+    assert user_indexes["idx_user_email"].get("unique") is True
+    assert "idx_user_google_sub" in user_indexes
+
 
 @pytest.mark.anyio
 async def test_live_mongodb_project_lifecycle_and_persistence_restart(live_mongo_manager: MongoManager):
@@ -185,7 +191,14 @@ def test_live_mongodb_http_api_endpoints():
     app = create_app(settings)
 
     with TestClient(app) as client:
-        headers = {"X-Client-Owner-ID": "test_http_owner_mongo"}
+        # Register authenticated user
+        reg_res = client.post(
+            "/api/v1/auth/register",
+            json={"email": "mongo_live_user@test.com", "name": "Mongo Live User", "password": "Password123!"},
+        )
+        assert reg_res.status_code == 201
+        token = reg_res.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
 
         # 1. Create project via HTTP POST
         res_create = client.post(

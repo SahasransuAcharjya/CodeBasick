@@ -13,6 +13,7 @@ import {
   deleteWorkspace as deleteLocalWorkspace,
   ensureWorkspaceFiles,
 } from "./storage";
+import { getAuthToken } from "./authApi";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const CLIENT_OWNER_ID_KEY = "codebasick_client_owner_id";
@@ -75,11 +76,16 @@ export function getClientOwnerId(): string {
  * Standard headers with client-owner isolation token.
  */
 function getHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
     "X-Client-Owner-ID": getClientOwnerId(),
   };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 /**
@@ -125,6 +131,7 @@ export async function fetchProjects(limit = 50, offset = 0): Promise<{
     const res = await fetch(`${API_BASE_URL}/api/v1/projects?limit=${limit}&offset=${offset}`, {
       method: "GET",
       headers: getHeaders(),
+      credentials: "include",
     });
 
     if (res.ok) {
@@ -177,6 +184,7 @@ export async function fetchProject(id: string): Promise<{
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${id}`, {
       method: "GET",
       headers: getHeaders(),
+      credentials: "include",
     });
 
     if (res.ok) {
@@ -210,6 +218,7 @@ export async function createProject(
     const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
       method: "POST",
       headers: getHeaders(),
+      credentials: "include",
       body: JSON.stringify({
         name: payload.name.trim(),
         language: payload.language,
@@ -285,6 +294,7 @@ export async function updateProject(
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${id}`, {
       method: "PUT",
       headers: getHeaders(),
+      credentials: "include",
       body: JSON.stringify(payload),
     });
 
@@ -312,6 +322,7 @@ export async function deleteProject(id: string): Promise<boolean> {
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${id}`, {
       method: "DELETE",
       headers: getHeaders(),
+      credentials: "include",
     });
     if (res.ok) {
       remoteDeleted = true;
@@ -373,6 +384,7 @@ export async function deleteProjectFile(projectId: string, fileId: string): Prom
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/files/${fileId}`, {
       method: "DELETE",
       headers: getHeaders(),
+      credentials: "include",
     });
     return res.ok;
   } catch (error) {
@@ -380,3 +392,37 @@ export async function deleteProjectFile(projectId: string, fileId: string): Prom
     return false;
   }
 }
+
+/**
+ * Safely import an anonymous local workspace into the user's authenticated cloud account.
+ */
+export async function importLocalWorkspaceToCloud(localWorkspace: Workspace): Promise<Workspace> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
+    method: "POST",
+    headers: getHeaders(),
+    credentials: "include",
+    body: JSON.stringify({
+      name: localWorkspace.name.trim(),
+      language: localWorkspace.language,
+      description: localWorkspace.description?.trim() || "",
+      files: localWorkspace.files?.map((f) => ({
+        name: f.name,
+        language: f.language,
+        content: f.content,
+        is_entry: f.isEntry || false,
+      })),
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || "Failed to import workspace to cloud.");
+  }
+
+  const data = await res.json();
+  const storageHeader = (res.headers.get("X-Storage-Backend") as "mongodb" | "in_memory") || data.storage || "mongodb";
+  const workspace = mapProjectToWorkspace(data);
+  workspace.storageBackend = storageHeader;
+  return workspace;
+}
+

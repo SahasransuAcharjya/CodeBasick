@@ -44,3 +44,19 @@ export interface NavItem {
   iconName: "layout-dashboard" | "folder-code" | "settings" | "book-open" | "terminal";
   badge?: string;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  authProvider: "local" | "google";
+  createdAt: string;
+}
+
+export interface AuthSession {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+

@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     MAX_PROJECT_FILE_SIZE_BYTES: int = 65536  # 64 KB per source file
     MAX_PROJECT_NAME_LENGTH: int = 100
 
+    # Authentication & Security Settings (Phase 8)
+    AUTH_SECRET_KEY: str = "cb_dev_secret_key_needs_replacement_in_production_32bytes_min_length_ok"
+    AUTH_ALGORITHM: str = "HS256"
+    AUTH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    AUTH_COOKIE_NAME: str = "cb_auth_token"
+    AUTH_COOKIE_SECURE: bool = False  # Set to True in HTTPS production
+    AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

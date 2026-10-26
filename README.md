@@ -148,8 +148,49 @@ MONGODB_CONNECT_TIMEOUT_MS=5000
   - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.
   - `idx_updated_at`: descending index on `updated_at` for sorted project queries.
 
+- **Authentication & Secure Project Ownership (Phase 8)**:
+  - **Account Registration & Login**: Full email/password registration (`POST /api/v1/auth/register`) with normalized lowercase emails, duplicate prevention, and bcrypt password hashing. User login (`POST /api/v1/auth/login`) with generic error messages preventing user enumeration.
+  - **Google Sign-In**: OpenID Connect token verification endpoint (`POST /api/v1/auth/google`) validating Google token signatures, issuer, audience, and verified email status. Protects against account hijacking by preventing unverified automatic linking of password-based accounts.
+  - **Secure Session Management**: Signed HS256 JWT access tokens with 7-day expiration and optional secure `HttpOnly` session cookie (`cb_auth_token`, `SameSite=Lax`). Real logout endpoint (`POST /api/v1/auth/logout`) that invalidates cookie credentials.
+  - **Independent FastAPI Identity Verification**: FastAPI verifies credentials server-side via `get_current_user` dependency. Client-supplied headers (e.g. `X-Client-Owner-ID`) are untrusted and completely ignored for authorization.
+  - **Protected Project & File APIs**: All project and sub-file routes enforce ownership scoped to the authenticated user ID. Cross-user access attempts return HTTP 404 (preventing info leakage), and unauthenticated requests return HTTP 401.
+  - **Preserved Local Workspaces**: Anonymous local browser workspaces are preserved. When logged in, users can click "Import All to Cloud" to promote local workspaces into authenticated cloud projects.
+  - **New Users Collection & Indexes**: MongoDB `users` collection initialized with unique indexes on `id`, `email`, and sparse unique index on `google_sub`.
+
+---
+
+## Database & Authentication Configuration
+
+Configure `apps/api/.env`:
+
+```env
+# MongoDB Atlas Connection URI (or local instance: mongodb://127.0.0.1:27017)
+# Format: mongodb+srv://<username>:<password>@<cluster-address>/<dbname>?retryWrites=true&w=majority
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB_NAME=codebasick
+MONGODB_CONNECT_TIMEOUT_MS=5000
+
+# Authentication & Security (Phase 8)
+AUTH_SECRET_KEY="replace-with-a-secure-random-secret-key-at-least-32-bytes"
+AUTH_ALGORITHM="HS256"
+AUTH_TOKEN_EXPIRE_MINUTES=10080
+AUTH_COOKIE_NAME="cb_auth_token"
+AUTH_COOKIE_SECURE=false # Set to true in HTTPS production
+AUTH_COOKIE_SAMESITE="lax"
+
+# Google OAuth 2.0 / OpenID Connect (Optional for Google Sign-In)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+```
+
+And in `apps/web/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
+```
+
 ### Running Tests:
-- Run backend test suite (88 automated tests):
+- Run complete backend test suite (106 automated tests):
   ```powershell
   cd apps/api
   pytest -v
@@ -159,15 +200,17 @@ MONGODB_CONNECT_TIMEOUT_MS=5000
   cd apps/api
   pytest -v tests/test_mongodb_live.py
   ```
-- Run frontend typecheck and linting:
+- Run authentication and project authorization tests:
+  ```powershell
+  cd apps/api
+  pytest -v tests/test_auth.py tests/test_project_authorization.py
+  ```
+- Run frontend typecheck, linting, and production build:
   ```powershell
   cd apps/web
   npm run typecheck
   npm run lint
   npm run build
-  ``` **Ephemeral Filesystem Warning**: Avoid storing persistent projects on ephemeral container filesystems (e.g. Heroku or Render free dyno ephemeral disks) which wipe on restart. Always connect to a persistent managed database like MongoDB Atlas.
-- **Indexes Created**:
-  - `idx_owner_id`: single index on `owner_id` for fast listing by user/client.
-  - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.
-  - `idx_updated_at`: descending index on `updated_at` for sorted project queries.
+  ```
+
 

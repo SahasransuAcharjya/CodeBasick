@@ -8,22 +8,35 @@ from app.main import create_app
 from app.repositories.project_repository import in_memory_repository
 
 
+from app.repositories.user_repository import in_memory_user_repo
+
+
 @pytest.fixture(autouse=True)
 def clear_storage() -> None:
     """Ensure in-memory repository is reset cleanly before every test."""
     in_memory_repository.clear()
+    in_memory_user_repo.clear()
 
 
 @pytest.fixture
 def client() -> TestClient:
-    """Fixture providing TestClient with test settings."""
+    """Fixture providing authenticated TestClient with test settings."""
     settings = Settings(
         ENVIRONMENT="test",
         DEBUG=False,
         MONGODB_URI=None,  # Tests run against isolated repository
     )
     app = create_app(settings)
-    return TestClient(app)
+    test_client = TestClient(app)
+    # Register default authenticated test user
+    reg = test_client.post(
+        "/api/v1/auth/register",
+        json={"email": "alpha_tester@codebasick.com", "name": "Alpha Tester", "password": "Password123!"},
+    ).json()
+    token = reg["access_token"]
+    test_client.headers["Authorization"] = f"Bearer {token}"
+    setattr(test_client, "test_user_id", reg["user"]["id"])
+    return test_client
 
 
 def test_create_python_project_default_starter(client: TestClient) -> None:
@@ -39,7 +52,7 @@ def test_create_python_project_default_starter(client: TestClient) -> None:
     data = res.json()
     assert data["name"] == "My Python Project"
     assert data["language"] == "python"
-    assert data["owner_id"] == "test-owner-alpha"
+    assert data["owner_id"] == getattr(client, "test_user_id", data["owner_id"])
     assert data["file_count"] == 1
     assert len(data["files"]) == 1
     assert data["files"][0]["name"] == "main.py"
@@ -252,14 +265,17 @@ def test_delete_project(client: TestClient) -> None:
 
 def test_owner_isolation_security(client: TestClient) -> None:
     """Security Test: Owner B cannot read, update, or delete Owner A's project."""
-    owner_a_headers = {"X-Client-Owner-ID": "owner-aaa-1111"}
-    owner_b_headers = {"X-Client-Owner-ID": "owner-bbb-2222"}
+    # Register Owner B
+    res_b = client.post(
+        "/api/v1/auth/register",
+        json={"email": "owner_b@test.com", "name": "Owner B", "password": "Password123!"},
+    ).json()
+    owner_b_headers = {"Authorization": f"Bearer {res_b['access_token']}"}
 
-    # Owner A creates project
+    # Owner A creates project (client uses Owner A's token by default)
     created = client.post(
         "/api/v1/projects",
         json={"name": "Secret Project A", "language": "python"},
-        headers=owner_a_headers,
     ).json()
     proj_id = created["id"]
 
@@ -285,7 +301,7 @@ def test_owner_isolation_security(client: TestClient) -> None:
     assert del_res.status_code == 404
 
     # Verify Owner A's project was not affected
-    a_proj = client.get(f"/api/v1/projects/{proj_id}", headers=owner_a_headers).json()
+    a_proj = client.get(f"/api/v1/projects/{proj_id}").json()
     assert a_proj["name"] == "Secret Project A"
 
 
@@ -347,27 +363,23 @@ def test_validation_oversized_file_content_rejection(client: TestClient) -> None
     assert "exceeds maximum limit" in resp.json()["details"][0]["message"]
 
 
-def test_default_local_owner_when_header_omitted(client: TestClient) -> None:
-    """Test that requests without X-Client-Owner-ID use deterministic default local owner."""
-    res = client.post(
-        "/api/v1/projects",
-        json={"name": "Default Owner Project", "language": "python"},
-    )
-    assert res.status_code == 201
-    assert res.json()["owner_id"] == "local-developer-owner"
+def test_unauthenticated_request_rejected_without_token(client: TestClient) -> None:
+    """Test that requests without authentication token or cookie are rejected with 401."""
+    client.cookies.clear()
+    res = client.get("/api/v1/projects", headers={"Authorization": ""})
+    assert res.status_code == 401
 
 
 def test_invalid_owner_id_header_format_rejected(client: TestClient) -> None:
-    """Test rejection of malformed or invalid characters in X-Client-Owner-ID."""
+    """Test rejection of forged or invalid authentication tokens."""
     invalid_headers = [
-        {"X-Client-Owner-ID": "ab"},  # too short
-        {"X-Client-Owner-ID": "a" * 70},  # too long
-        {"X-Client-Owner-ID": "owner;drop table;"},  # illegal characters
-        {"X-Client-Owner-ID": "owner/subpath"},  # illegal slash
+        {"Authorization": "Bearer not-a-valid-token"},
+        {"Authorization": "Bearer abc"},
+        {"Authorization": "Basic dXNlcjpwYXNz"},
     ]
     for h in invalid_headers:
         res = client.get("/api/v1/projects", headers=h)
-        assert res.status_code == 422
+        assert res.status_code == 401
 
 
 @pytest.mark.anyio
@@ -388,45 +400,57 @@ async def test_mongodb_manager_graceful_unreachable_handling() -> None:
 
 def test_owner_isolation_all_subfile_operations(client: TestClient) -> None:
     """Verify that an unauthorized owner cannot add, update, or delete files in another project."""
+    # Register intruder
+    res_intruder = client.post(
+        "/api/v1/auth/register",
+        json={"email": "intruder1@test.com", "name": "Intruder One", "password": "Password123!"},
+    ).json()
+    intruder_headers = {"Authorization": f"Bearer {res_intruder['access_token']}"}
+
     # Owner Alpha creates project
     created = client.post(
         "/api/v1/projects",
         json={"name": "Alpha Secure Project", "language": "python"},
-        headers={"X-Client-Owner-ID": "owner_alpha_sec"},
     ).json()
     proj_id = created["id"]
     file_id = created["files"][0]["id"]
 
-    # Owner Beta attempts to add a file -> 404
+    # Intruder attempts to add a file -> 404
     res_add = client.post(
         f"/api/v1/projects/{proj_id}/files",
         json={"name": "injected.py", "content": "# malicious"},
-        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+        headers=intruder_headers,
     )
     assert res_add.status_code == 404
 
-    # Owner Beta attempts to update file -> 404
+    # Intruder attempts to update file -> 404
     res_update = client.put(
         f"/api/v1/projects/{proj_id}/files/{file_id}",
         json={"content": "# overwrite attempt"},
-        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+        headers=intruder_headers,
     )
     assert res_update.status_code == 404
 
-    # Owner Beta attempts to delete file -> 404
+    # Intruder attempts to delete file -> 404
     res_del = client.delete(
         f"/api/v1/projects/{proj_id}/files/{file_id}",
-        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+        headers=intruder_headers,
     )
     assert res_del.status_code == 404
 
 
 def test_owner_isolation_update_and_delete_project(client: TestClient) -> None:
     """Verify that an unauthorized owner cannot update or delete another owner's project."""
+    # Register intruder
+    res_intruder = client.post(
+        "/api/v1/auth/register",
+        json={"email": "intruder2@test.com", "name": "Intruder Two", "password": "Password123!"},
+    ).json()
+    intruder_headers = {"Authorization": f"Bearer {res_intruder['access_token']}"}
+
     created = client.post(
         "/api/v1/projects",
         json={"name": "Alpha Locked Project", "language": "python"},
-        headers={"X-Client-Owner-ID": "owner_alpha_sec2"},
     ).json()
     proj_id = created["id"]
 
@@ -434,22 +458,19 @@ def test_owner_isolation_update_and_delete_project(client: TestClient) -> None:
     res_update = client.put(
         f"/api/v1/projects/{proj_id}",
         json={"name": "Hacked Name"},
-        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+        headers=intruder_headers,
     )
     assert res_update.status_code == 404
 
     # Intruder tries to delete
     res_del = client.delete(
         f"/api/v1/projects/{proj_id}",
-        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+        headers=intruder_headers,
     )
     assert res_del.status_code == 404
 
     # Confirm Alpha's project is completely untouched
-    res_get = client.get(
-        f"/api/v1/projects/{proj_id}",
-        headers={"X-Client-Owner-ID": "owner_alpha_sec2"},
-    )
+    res_get = client.get(f"/api/v1/projects/{proj_id}")
     assert res_get.status_code == 200
     assert res_get.json()["name"] == "Alpha Locked Project"
 

@@ -77,6 +77,18 @@ class MongoManager:
             # Sorting by last updated timestamp
             await projects_col.create_index([("updated_at", DESCENDING)], name="idx_updated_at")
             logger.info("MongoDB indexes verified on 'projects' collection.")
+
+            # Ensure indexes on users collection
+            users_col = self.db["users"]
+            await users_col.create_index([("id", ASCENDING)], unique=True, name="idx_user_id")
+            await users_col.create_index([("email", ASCENDING)], unique=True, name="idx_user_email")
+            await users_col.create_index(
+                [("google_sub", ASCENDING)],
+                unique=True,
+                sparse=True,
+                name="idx_user_google_sub",
+            )
+            logger.info("MongoDB indexes verified on 'users' collection.")
         except Exception as exc:
             logger.warning("Failed to create MongoDB indexes: %s", exc)
 
