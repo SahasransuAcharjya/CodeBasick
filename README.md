@@ -111,24 +111,22 @@ pytest -v
 - **Buffer Safety**: Switching between languages or tabs maintains isolated in-memory source buffers. User edits are never silently overwritten.
 - **Multi-File Explorer**: Add and switch files (`.c`, `.h`, `.py`, `.js`, etc.) with extension validation and duplicate prevention.
 - **Output & Diagnostics Panel**: Real console with Output, Diagnostics, and Execution Status tabs, displaying real-time execution outputs, compiler errors, exceptions, and execution metrics.
-- **OneCompiler Code Execution Integration**: Dedicated backend proxy at `POST /api/v1/execute` connected to OneCompiler's cloud code execution engine. The Run button triggers remote sandbox compilation and execution.
-- **Gemini AI Tutoring (Phase 6)**: AI Pseudocode generation and line-by-line explanation using Google Gemini API (`POST /api/v1/ai/pseudocode` and `POST /api/v1/ai/explain`).
-- **AI Error Doctor & One-Click Fix (Phase 7A)**: Automatic syntax and runtime error diagnosis with interactive unified code diffs and undoable single-click editor fix application (`POST /api/v1/ai/diagnose-error`).
-- **Persistent Project Storage (Phase 7B)**:
-  - **Database Persistence**: Managed MongoDB Atlas connection via async `motor` driver with startup connection lifecycle, graceful fallback handling, and optimized indexes on `owner_id`, compound unique `(owner_id, id)`, and `updated_at`.
+- **OneCompiler Code Execution Integration**: Dedicated backend proxy at `POST /api/  - **Persistent Project Storage (Phase 7B & 7B.1)**:
+  - **Database Persistence**: Managed MongoDB connection via async `motor` driver with startup connection lifecycle, graceful fallback handling, and optimized indexes on `owner_id`, compound unique `(owner_id, id)`, and `updated_at`.
   - **Project & File Management API**: RESTful CRUD endpoints (`POST /api/v1/projects`, `GET /api/v1/projects`, `GET /api/v1/projects/{id}`, `PUT /api/v1/projects/{id}`, `DELETE /api/v1/projects/{id}`, and sub-file routes).
-  - **Autosave & Editor Synchronization**: Debounced autosave (1.5s delay) with visual indicators (`Saved`, `Saving...`, `Save`, `Save Failed (Retry)`), keyboard shortcut `Ctrl+S`, project renaming modal, and zero data loss on file switching.
-  - **Tenant Isolation**: Protected client ownership model via `X-Client-Owner-ID` header generated per client workspace session, preventing cross-tenant access without exposing public unauthenticated project data.
-  - **Resilient Offline Fallback**: Dual-layer architecture: frontend writes synchronously to local cache (`localStorage`) and debounces asynchronous persistence to the FastAPI/MongoDB backend. If the backend or database is offline, local workspaces remain fully functional.
+  - **Truthful Autosave & Status Indicators**: Unambiguous visual indicators: `Saved (Cloud)` for confirmed database persistence, `Saved (Local Only)` when operating in offline/browser-cached fallback, `Saving...`, `Save`, and `Save Failed (Retry)`.
+  - **Buffer Safety & Project Switching**: Active edits are flushed immediately on component unmount and cross-project navigation, with stale-sequence protection preventing out-of-order save status overwrites.
+  - **Tenant Scoping**: Client ownership isolation via `X-Client-Owner-ID` header. *(Note: This is a client-partitioning token; a cryptographic identity provider is required prior to public multi-user deployment).*
+  - **Resilient Dual-Layer Architecture**: Frontend writes synchronously to browser cache (`localStorage`) and debounces persistence to FastAPI/MongoDB. If the database or API is unreachable, local code is never lost and users can trigger manual retry synchronization.
 
 ---
 
-## Database Configuration (MongoDB Atlas)
+## Database Configuration (MongoDB Atlas & Local)
 
-For production and persistent development storage, configure MongoDB Atlas in `apps/api/.env`:
+For production and persistent development storage, configure MongoDB in `apps/api/.env`:
 
 ```env
-# MongoDB Atlas Connection URI (Replace with your actual cluster URI)
+# MongoDB Atlas Connection URI (or local instance: mongodb://127.0.0.1:27017)
 # Format: mongodb+srv://<username>:<password>@<cluster-address>/<dbname>?retryWrites=true&w=majority
 MONGODB_URI=mongodb+srv://db_user:YOUR_SECRET_PASSWORD@cluster0.example.mongodb.net/?retryWrites=true&w=majority
 
@@ -142,8 +140,32 @@ MONGODB_CONNECT_TIMEOUT_MS=5000
 ### Database Behavior & Safety:
 - **Server-Side Only**: MongoDB credentials are strictly kept in `apps/api/.env` and are never exposed to the Next.js frontend or browser.
 - **Connection Lifecycle**: Initialized asynchronously during FastAPI application startup (`lifespan` context) and properly closed on shutdown.
-- **Graceful Unreachability**: If `MONGODB_URI` is left unconfigured or MongoDB Atlas is temporarily unreachable, FastAPI gracefully logs a warning and falls back to the in-memory/local repository without crashing the API or blocking code execution or AI tutoring features.
+- **Graceful Unreachability**: If `MONGODB_URI` is unconfigured or MongoDB is temporarily unreachable, FastAPI gracefully logs a warning and falls back to in-memory mode without crashing the API or interrupting OneCompiler code execution or AI tutoring features.
+- **Truthful Save States**: The API passes `X-Storage-Backend: mongodb` (or `in_memory`), enabling the frontend to distinguish real cloud database saves from local-only saves.
 - **Ephemeral Filesystem Warning**: Avoid storing persistent projects on ephemeral container filesystems (e.g. Heroku or Render free dyno ephemeral disks) which wipe on restart. Always connect to a persistent managed database like MongoDB Atlas.
+- **Indexes Created**:
+  - `idx_owner_id`: single index on `owner_id` for fast listing by user/client.
+  - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.
+  - `idx_updated_at`: descending index on `updated_at` for sorted project queries.
+
+### Running Tests:
+- Run backend test suite (88 automated tests):
+  ```powershell
+  cd apps/api
+  pytest -v
+  ```
+- Run live MongoDB integration tests:
+  ```powershell
+  cd apps/api
+  pytest -v tests/test_mongodb_live.py
+  ```
+- Run frontend typecheck and linting:
+  ```powershell
+  cd apps/web
+  npm run typecheck
+  npm run lint
+  npm run build
+  ``` **Ephemeral Filesystem Warning**: Avoid storing persistent projects on ephemeral container filesystems (e.g. Heroku or Render free dyno ephemeral disks) which wipe on restart. Always connect to a persistent managed database like MongoDB Atlas.
 - **Indexes Created**:
   - `idx_owner_id`: single index on `owner_id` for fast listing by user/client.
   - `idx_owner_project_unique`: unique compound index on `(owner_id, id)` for strict isolation.

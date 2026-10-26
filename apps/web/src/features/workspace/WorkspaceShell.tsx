@@ -86,6 +86,12 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   );
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const latestSaveSeqRef = useRef<number>(0);
+  const currentProjectIdRef = useRef<string>(initialWorkspace.id);
+
+  useEffect(() => {
+    currentProjectIdRef.current = initialWorkspace.id;
+  }, [initialWorkspace.id]);
+
   const pendingWorkspaceRef = useRef<{
     files: WorkspaceFile[];
     activeFileId: string;
@@ -146,12 +152,13 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       }
 
       const executeSave = async () => {
+        const targetProjectId = initialWorkspace.id;
         const seq = ++latestSaveSeqRef.current;
         setSaveStatus("saving");
         const currentData = pendingWorkspaceRef.current;
 
         try {
-          const res = await updateRemoteProject(initialWorkspace.id, {
+          const res = await updateRemoteProject(targetProjectId, {
             name: currentData.name,
             files: currentData.files,
             activeFileId: currentData.activeFileId,
@@ -159,7 +166,8 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
             language: currentData.language,
           });
 
-          if (latestSaveSeqRef.current === seq) {
+          // Prevent stale requests or cross-project save status overwrite
+          if (latestSaveSeqRef.current === seq && currentProjectIdRef.current === targetProjectId) {
             if (res.isRemote && res.storageBackend === "mongodb") {
               setSaveStatus("saved");
             } else {
@@ -169,7 +177,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
           }
         } catch (err) {
           console.error("Autosave failed:", err);
-          if (latestSaveSeqRef.current === seq) {
+          if (latestSaveSeqRef.current === seq && currentProjectIdRef.current === targetProjectId) {
             setSaveStatus("error");
           }
         }
@@ -262,9 +270,17 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       window.removeEventListener("keydown", handleKeyDown);
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
+        const currentData = pendingWorkspaceRef.current;
+        updateRemoteProject(initialWorkspace.id, {
+          name: currentData.name,
+          files: currentData.files,
+          activeFileId: currentData.activeFileId,
+          openFileIds: currentData.openFileIds,
+          language: currentData.language,
+        }).catch((err) => console.warn("Failed to flush pending save on unmount:", err));
       }
     };
-  }, [handleManualSave]);
+  }, [handleManualSave, initialWorkspace.id]);
 
   // Active File Reference
   const activeFile = useMemo(() => {

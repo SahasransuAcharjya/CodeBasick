@@ -385,3 +385,85 @@ async def test_mongodb_manager_graceful_unreachable_handling() -> None:
     assert mgr.db is None
     await mgr.close()
 
+
+def test_owner_isolation_all_subfile_operations(client: TestClient) -> None:
+    """Verify that an unauthorized owner cannot add, update, or delete files in another project."""
+    # Owner Alpha creates project
+    created = client.post(
+        "/api/v1/projects",
+        json={"name": "Alpha Secure Project", "language": "python"},
+        headers={"X-Client-Owner-ID": "owner_alpha_sec"},
+    ).json()
+    proj_id = created["id"]
+    file_id = created["files"][0]["id"]
+
+    # Owner Beta attempts to add a file -> 404
+    res_add = client.post(
+        f"/api/v1/projects/{proj_id}/files",
+        json={"name": "injected.py", "content": "# malicious"},
+        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+    )
+    assert res_add.status_code == 404
+
+    # Owner Beta attempts to update file -> 404
+    res_update = client.put(
+        f"/api/v1/projects/{proj_id}/files/{file_id}",
+        json={"content": "# overwrite attempt"},
+        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+    )
+    assert res_update.status_code == 404
+
+    # Owner Beta attempts to delete file -> 404
+    res_del = client.delete(
+        f"/api/v1/projects/{proj_id}/files/{file_id}",
+        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+    )
+    assert res_del.status_code == 404
+
+
+def test_owner_isolation_update_and_delete_project(client: TestClient) -> None:
+    """Verify that an unauthorized owner cannot update or delete another owner's project."""
+    created = client.post(
+        "/api/v1/projects",
+        json={"name": "Alpha Locked Project", "language": "python"},
+        headers={"X-Client-Owner-ID": "owner_alpha_sec2"},
+    ).json()
+    proj_id = created["id"]
+
+    # Intruder tries to update
+    res_update = client.put(
+        f"/api/v1/projects/{proj_id}",
+        json={"name": "Hacked Name"},
+        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+    )
+    assert res_update.status_code == 404
+
+    # Intruder tries to delete
+    res_del = client.delete(
+        f"/api/v1/projects/{proj_id}",
+        headers={"X-Client-Owner-ID": "owner_beta_intruder"},
+    )
+    assert res_del.status_code == 404
+
+    # Confirm Alpha's project is completely untouched
+    res_get = client.get(
+        f"/api/v1/projects/{proj_id}",
+        headers={"X-Client-Owner-ID": "owner_alpha_sec2"},
+    )
+    assert res_get.status_code == 200
+    assert res_get.json()["name"] == "Alpha Locked Project"
+
+
+def test_unconfigured_mongodb_returns_in_memory_storage_header(client: TestClient) -> None:
+    """Verify that when running without MongoDB, API returns in_memory storage indicator."""
+    res = client.post(
+        "/api/v1/projects",
+        json={"name": "Fallback Test Project", "language": "python"},
+        headers={"X-Client-Owner-ID": "owner_fallback_test"},
+    )
+    assert res.status_code == 201
+    assert res.headers.get("x-storage-backend") == "in_memory"
+    data = res.json()
+    assert data["storage"] == "in_memory"
+
+
