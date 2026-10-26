@@ -36,6 +36,7 @@ export interface RemoteProjectResponse {
   files?: RemoteProjectFile[];
   active_file_id?: string;
   open_file_ids?: string[];
+  storage?: "mongodb" | "in_memory";
 }
 
 export interface RemoteProjectSummary {
@@ -46,6 +47,13 @@ export interface RemoteProjectSummary {
   created_at: string;
   updated_at: string;
   file_count: number;
+  storage?: "mongodb" | "in_memory";
+}
+
+export interface SaveProjectResult {
+  workspace: Workspace;
+  isRemote: boolean;
+  storageBackend: "mongodb" | "in_memory" | "local";
 }
 
 /**
@@ -98,6 +106,7 @@ function mapProjectToWorkspace(data: RemoteProjectResponse): Workspace {
     files,
     activeFileId: data.active_file_id || (files[0]?.id ?? ""),
     openFileIds: data.open_file_ids && data.open_file_ids.length > 0 ? data.open_file_ids : [files[0]?.id ?? ""],
+    storageBackend: (data.storage as "mongodb" | "in_memory") || "mongodb",
   };
 
   return ensureWorkspaceFiles(ws);
@@ -106,7 +115,12 @@ function mapProjectToWorkspace(data: RemoteProjectResponse): Workspace {
 /**
  * Fetch all projects belonging to the current owner.
  */
-export async function fetchProjects(limit = 50, offset = 0): Promise<{ items: Workspace[]; total: number; isRemote: boolean }> {
+export async function fetchProjects(limit = 50, offset = 0): Promise<{
+  items: Workspace[];
+  total: number;
+  isRemote: boolean;
+  storageBackend: "mongodb" | "in_memory" | "local";
+}> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/projects?limit=${limit}&offset=${offset}`, {
       method: "GET",
@@ -115,6 +129,7 @@ export async function fetchProjects(limit = 50, offset = 0): Promise<{ items: Wo
 
     if (res.ok) {
       const data = await res.json();
+      const storageHeader = (res.headers.get("X-Storage-Backend") as "mongodb" | "in_memory") || data.storage || "mongodb";
       const items = (data.items || []).map((item: RemoteProjectSummary) => {
         // Summaries don't have full files, check local cache or construct base
         const cached = getLocalWorkspaceById(item.id);
@@ -122,6 +137,7 @@ export async function fetchProjects(limit = 50, offset = 0): Promise<{ items: Wo
           cached.name = item.name;
           cached.updatedAt = item.updated_at;
           cached.fileCount = item.file_count;
+          cached.storageBackend = storageHeader;
           return cached;
         }
         return {
@@ -132,23 +148,31 @@ export async function fetchProjects(limit = 50, offset = 0): Promise<{ items: Wo
           createdAt: item.created_at,
           updatedAt: item.updated_at,
           fileCount: item.file_count,
+          storageBackend: storageHeader,
         } as Workspace;
       });
-      return { items, total: data.total, isRemote: true };
+      return { items, total: data.total, isRemote: true, storageBackend: storageHeader };
     }
   } catch (error) {
     console.warn("Backend API offline or unreachable, falling back to local storage:", error);
   }
 
   // Resilient fallback to local storage
-  const locals = getLocalWorkspaces();
-  return { items: locals, total: locals.length, isRemote: false };
+  const locals = getLocalWorkspaces().map((ws) => ({
+    ...ws,
+    storageBackend: "local" as const,
+  }));
+  return { items: locals, total: locals.length, isRemote: false, storageBackend: "local" };
 }
 
 /**
  * Fetch a single project by ID with full files.
  */
-export async function fetchProject(id: string): Promise<{ workspace: Workspace | null; isRemote: boolean }> {
+export async function fetchProject(id: string): Promise<{
+  workspace: Workspace | null;
+  isRemote: boolean;
+  storageBackend: "mongodb" | "in_memory" | "local";
+}> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/projects/${id}`, {
       method: "GET",
@@ -157,10 +181,12 @@ export async function fetchProject(id: string): Promise<{ workspace: Workspace |
 
     if (res.ok) {
       const data = await res.json();
+      const storageHeader = (res.headers.get("X-Storage-Backend") as "mongodb" | "in_memory") || data.storage || "mongodb";
       const workspace = mapProjectToWorkspace(data);
+      workspace.storageBackend = storageHeader;
       // Cache to local storage
       updateLocalWorkspace(workspace);
-      return { workspace, isRemote: true };
+      return { workspace, isRemote: true, storageBackend: storageHeader };
     }
   } catch (error) {
     console.warn(`Failed to fetch project ${id} from API, checking local storage:`, error);
@@ -168,7 +194,10 @@ export async function fetchProject(id: string): Promise<{ workspace: Workspace |
 
   // Fallback to local storage
   const local = getLocalWorkspaceById(id);
-  return { workspace: local || null, isRemote: false };
+  if (local) {
+    local.storageBackend = "local";
+  }
+  return { workspace: local || null, isRemote: false, storageBackend: "local" };
 }
 
 /**
@@ -190,7 +219,9 @@ export async function createProject(
 
     if (res.ok) {
       const data = await res.json();
+      const storageHeader = (res.headers.get("X-Storage-Backend") as "mongodb" | "in_memory") || data.storage || "mongodb";
       const workspace = mapProjectToWorkspace(data);
+      workspace.storageBackend = storageHeader;
       // Also write to local storage as cache
       updateLocalWorkspace(workspace);
       return workspace;
@@ -200,7 +231,9 @@ export async function createProject(
   }
 
   // Local fallback
-  return createLocalWorkspace(payload);
+  const created = createLocalWorkspace(payload);
+  created.storageBackend = "local";
+  return created;
 }
 
 /**
@@ -216,7 +249,7 @@ export async function updateProject(
     openFileIds?: string[];
     files?: WorkspaceFile[];
   }
-): Promise<{ workspace: Workspace; isRemote: boolean }> {
+): Promise<SaveProjectResult> {
   // Always update local cache first for zero-data-loss resiliency
   const local = getLocalWorkspaceById(id);
   if (local) {
@@ -257,15 +290,17 @@ export async function updateProject(
 
     if (res.ok) {
       const data = await res.json();
+      const storageHeader = (res.headers.get("X-Storage-Backend") as "mongodb" | "in_memory") || data.storage || "mongodb";
       const mapped = mapProjectToWorkspace(data);
+      mapped.storageBackend = storageHeader;
       updateLocalWorkspace(mapped);
-      return { workspace: mapped, isRemote: true };
+      return { workspace: mapped, isRemote: true, storageBackend: storageHeader };
     }
   } catch (error) {
     console.warn(`Failed to update project ${id} on backend:`, error);
   }
 
-  return { workspace: local || ({} as Workspace), isRemote: false };
+  return { workspace: local || ({} as Workspace), isRemote: false, storageBackend: "local" };
 }
 
 /**

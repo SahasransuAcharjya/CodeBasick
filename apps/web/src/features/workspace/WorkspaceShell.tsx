@@ -76,9 +76,11 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
   const [diagnosedFileId, setDiagnosedFileId] = useState<string | null>(null);
   const [isFixApplied, setIsFixApplied] = useState(false);
 
-  // Phase 7B: Persistent Storage & Autosave States
+  // Phase 7B / 7B.1: Persistent Storage & Autosave States
   const [workspaceName, setWorkspaceName] = useState(initialWorkspace.name);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
+  const [saveStatus, setSaveStatus] = useState<
+    "saved" | "saved-local" | "saving" | "unsaved" | "error"
+  >(initialWorkspace.storageBackend === "local" ? "saved-local" : "saved");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     initialWorkspace.updatedAt ? new Date(initialWorkspace.updatedAt).toLocaleTimeString() : null
   );
@@ -149,7 +151,7 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
         const currentData = pendingWorkspaceRef.current;
 
         try {
-          await updateRemoteProject(initialWorkspace.id, {
+          const res = await updateRemoteProject(initialWorkspace.id, {
             name: currentData.name,
             files: currentData.files,
             activeFileId: currentData.activeFileId,
@@ -158,7 +160,11 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
           });
 
           if (latestSaveSeqRef.current === seq) {
-            setSaveStatus("saved");
+            if (res.isRemote && res.storageBackend === "mongodb") {
+              setSaveStatus("saved");
+            } else {
+              setSaveStatus("saved-local");
+            }
             setLastSavedAt(new Date().toLocaleTimeString());
           }
         } catch (err) {
@@ -226,14 +232,18 @@ export function WorkspaceShell({ initialWorkspace }: WorkspaceShellProps) {
       setWorkspaceName(clean);
       pendingWorkspaceRef.current.name = clean;
       setSaveStatus("saving");
-      await updateRemoteProject(initialWorkspace.id, {
+      const res = await updateRemoteProject(initialWorkspace.id, {
         name: clean,
         files,
         activeFileId,
         openFileIds,
         language,
       });
-      setSaveStatus("saved");
+      if (res.isRemote && res.storageBackend === "mongodb") {
+        setSaveStatus("saved");
+      } else {
+        setSaveStatus("saved-local");
+      }
       setLastSavedAt(new Date().toLocaleTimeString());
     },
     [initialWorkspace.id, files, activeFileId, openFileIds, language]

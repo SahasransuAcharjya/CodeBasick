@@ -60,6 +60,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=settings.ALLOWED_METHODS,
         allow_headers=settings.ALLOWED_HEADERS,
+        expose_headers=["X-Storage-Backend"],
     )
 
     # Centralized exception handlers

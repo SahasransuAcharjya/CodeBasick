@@ -188,6 +188,7 @@ class ProjectSummaryResponse(BaseModel):
     created_at: str
     updated_at: str
     file_count: int
+    storage: Optional[str] = Field(default="mongodb", description="Storage backend used: 'mongodb' or 'in_memory'.")
 
 
 class ProjectResponse(BaseModel):
@@ -204,6 +205,7 @@ class ProjectResponse(BaseModel):
     files: List[ProjectFile]
     active_file_id: Optional[str] = None
     open_file_ids: List[str] = Field(default_factory=list)
+    storage: Optional[str] = Field(default="mongodb", description="Storage backend used: 'mongodb' or 'in_memory'.")
 
 
 class ProjectListResponse(BaseModel):
@@ -213,3 +215,4 @@ class ProjectListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    storage: Optional[str] = Field(default="mongodb", description="Active storage backend: 'mongodb' or 'in_memory'.")

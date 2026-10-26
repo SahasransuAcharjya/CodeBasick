@@ -41,6 +41,7 @@ class Settings(BaseSettings):
         "Authorization",
         "Accept",
         "X-Requested-With",
+        "X-Client-Owner-ID",
     ]
 
     # Logging

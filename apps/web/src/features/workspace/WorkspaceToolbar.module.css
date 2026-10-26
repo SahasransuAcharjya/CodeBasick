@@ -97,6 +97,25 @@
   user-select: none;
 }
 
+.saveStatusLocal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.saveStatusLocal:hover {
+  background-color: rgba(56, 189, 248, 0.2);
+}
+
 .saveStatusUnsaved {
   display: inline-flex;
   align-items: center;

@@ -176,7 +176,10 @@ export default function DashboardPage() {
                         Created {new Date(ws.createdAt).toLocaleDateString()}
                       </CardDescription>
                     </div>
-                    <div className={styles.cardHeaderRight}>
+                    <div className={styles.cardHeaderRight} style={{ display: "flex", gap: "0.35rem" }}>
+                      <Badge variant={ws.storageBackend === "mongodb" ? "teal" : "neutral"}>
+                        {ws.storageBackend === "mongodb" ? "Cloud DB" : "Local"}
+                      </Badge>
                       <Badge variant="teal">
                         {getLanguageLabel(ws.language)}
                       </Badge>

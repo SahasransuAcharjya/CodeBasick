@@ -13,6 +13,7 @@ import {
   CloudUpload,
   AlertCircle,
   Edit2,
+  HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -20,6 +21,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { ProgrammingLanguage } from "./workspace.types";
 import styles from "./WorkspaceToolbar.module.css";
+
+export type SaveStatus = "saved" | "saved-local" | "saving" | "unsaved" | "error";
 
 export interface WorkspaceToolbarProps {
   workspaceName: string;
@@ -37,8 +40,8 @@ export interface WorkspaceToolbarProps {
   isRunning?: boolean;
   isGeneratingPseudocode?: boolean;
   isGeneratingExplanation?: boolean;
-  // Phase 7B: Persistent Storage & Autosave
-  saveStatus?: "saved" | "saving" | "unsaved" | "error";
+  // Phase 7B / 7B.1: Persistent Storage & Autosave
+  saveStatus?: SaveStatus;
   onSave?: () => void;
   lastSavedAt?: string | null;
   onRenameWorkspace?: (newName: string) => void;
@@ -121,10 +124,10 @@ export function WorkspaceToolbar({
           </button>
         )}
 
-        {/* Phase 7B: Save Status Indicator */}
+        {/* Phase 7B / 7B.1: Truthful Save Status Indicator */}
         <div className={styles.saveIndicatorWrapper}>
           {saveStatus === "saving" && (
-            <div className={styles.saveStatusSaving} title="Saving changes to persistent database...">
+            <div className={styles.saveStatusSaving} title="Saving changes...">
               <Loader2 size={11} className={styles.spin} />
               <span>Saving...</span>
             </div>
@@ -132,11 +135,22 @@ export function WorkspaceToolbar({
           {saveStatus === "saved" && (
             <div
               className={styles.saveStatusSaved}
-              title={lastSavedAt ? `Saved to database at ${lastSavedAt}` : "All changes saved to database"}
+              title={lastSavedAt ? `Saved to persistent database at ${lastSavedAt}` : "All changes saved to persistent database"}
             >
               <Check size={11} />
-              <span>Saved</span>
+              <span>Saved (Cloud)</span>
             </div>
+          )}
+          {saveStatus === "saved-local" && (
+            <button
+              type="button"
+              className={styles.saveStatusLocal}
+              onClick={onSave}
+              title={lastSavedAt ? `Saved locally in browser cache at ${lastSavedAt}. Remote database is disconnected. Click to retry cloud sync.` : "Saved locally in browser cache. Click to retry cloud sync."}
+            >
+              <HardDrive size={11} />
+              <span>Saved (Local Only)</span>
+            </button>
           )}
           {saveStatus === "unsaved" && (
             <button
@@ -154,7 +168,7 @@ export function WorkspaceToolbar({
               type="button"
               className={styles.saveStatusError}
               onClick={onSave}
-              title="Save failed. Click to retry."
+              title="Save to database failed. Local edits are preserved. Click to retry."
             >
               <AlertCircle size={11} />
               <span>Save Failed (Retry)</span>

@@ -22,6 +22,7 @@ export interface Workspace {
   files?: WorkspaceFile[];
   activeFileId?: string;
   openFileIds?: string[];
+  storageBackend?: "mongodb" | "in_memory" | "local";
 }
 
 export interface WorkspacePreferences {
